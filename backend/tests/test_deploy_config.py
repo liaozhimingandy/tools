@@ -6,7 +6,7 @@
     `prepared statement "_pg3_x" does not exist` 间歇错误；
   - CORS 白名单解析：逗号分隔、去尾斜杠、空串；
   - passthrough provider：永不 401、缺头回落默认 sub、超长 sub 拒绝；
-  - /api/auth/mode：passthrough 模式明确暴露 insecure 风险提示。
+  - /v1/auth/mode：passthrough 模式明确暴露 insecure 风险提示。
 测试不依赖真实 PG / 网络 / 真实时钟。
 """
 
@@ -187,7 +187,7 @@ class TestPassthroughProvider(unittest.TestCase):
 
 
 class TestPassthroughAPIMode(unittest.TestCase):
-    """app.state 装配为 passthrough 时，/api/auth/mode 暴露 insecure 提示。"""
+    """app.state 装配为 passthrough 时，/v1/auth/mode 暴露 insecure 提示。"""
 
     def setUp(self) -> None:
         self.client = TestClient(app)
@@ -211,7 +211,7 @@ class TestPassthroughAPIMode(unittest.TestCase):
         app.state.repository = MemoryRepository()
         app.state.tool_repository = MemoryToolRepository()
         app.state.logto_configured = False
-        body = self.client.get("/api/auth/mode").json()
+        body = self.client.get("/v1/auth/mode").json()
         self.assertEqual(body["mode"], "passthrough")
         self.assertFalse(body["secure"])
         self.assertIn("不鉴权", body["warning"])
@@ -228,14 +228,14 @@ class TestPassthroughAPIMode(unittest.TestCase):
         app.state.logto_configured = False
         # 无身份头：不 401，写入匿名槽
         r = self.client.put(
-            "/api/v1/configs/safekeep/vault",
+            "/v1/configs/safekeep/vault",
             json={"value": {"ct": "x"}, "expected_revision": 0},
         )
         self.assertEqual(r.status_code, 200)
         self.assertIsNotNone(repo.get("anonymous", "safekeep", "vault"))
         # 声明身份头：落到对应槽，彼此隔离
         r2 = self.client.put(
-            "/api/v1/configs/safekeep/vault",
+            "/v1/configs/safekeep/vault",
             json={"value": {"ct": "y"}, "expected_revision": 0},
             headers={"X-User-Sub": "logto|alice"},
         )

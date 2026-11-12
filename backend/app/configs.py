@@ -1,14 +1,16 @@
 """公共配置表 API（多工具共享，零知识密文同步）。
 
-路由：
-  GET    /api/v1/tools                           列出启用工具（注册表）
-  GET    /api/v1/tools/{tool_id}                 单个工具元信息
-  GET    /api/v1/configs/{tool_id}              列出该工具下当前用户全部配置
-  GET    /api/v1/configs/{tool_id}/{key}        取单条（返回 ETag）
-  PUT    /api/v1/configs/{tool_id}/{key}        UPSERT（乐观锁 CAS）
-  DELETE /api/v1/configs/{tool_id}/{key}        软删除（乐观锁 CAS）
-  GET    /api/v1/configs/{tool_id}/_quota       配额使用情况（工具覆盖值优先）
-  GET    /api/auth/mode                         当前鉴权模式与风险提示
+路由（统一 /v1 前缀，不再有 /api 段）：
+  GET    /v1/health                         健康检查（main.py 元信息接口）
+  GET    /v1/version                        版本信息（main.py 元信息接口）
+  GET    /v1/auth/mode                      当前鉴权模式与风险提示
+  GET    /v1/tools                          列出启用工具（注册表）
+  GET    /v1/tools/{tool_id}                单个工具元信息
+  GET    /v1/configs/{tool_id}              列出该工具下当前用户全部配置
+  GET    /v1/configs/{tool_id}/{key}        取单条（返回 ETag）
+  PUT    /v1/configs/{tool_id}/{key}        UPSERT（乐观锁 CAS）
+  DELETE /v1/configs/{tool_id}/{key}        软删除（乐观锁 CAS）
+  GET    /v1/configs/{tool_id}/_quota       配额使用情况（工具覆盖值优先）
 
 安全契约（贯穿本文件）：
   1. user_sub 只来自 request.state.principal.sub（鉴权层注入），
@@ -158,7 +160,7 @@ def _to_response(rec: Any) -> ConfigRecordResponse:
 # --------------------------------------------------------------------------- #
 
 
-@router.get("/api/auth/mode", response_model=AuthModeResponse, tags=["configs"])
+@router.get("/v1/auth/mode", response_model=AuthModeResponse, tags=["configs"])
 def auth_mode_endpoint(request: Request) -> AuthModeResponse:
     """暴露鉴权模式，便于前端/运维识别 passthrough/dev/stub 的不安全状态。"""
     provider: AuthProvider = _state(request).auth_provider
@@ -183,7 +185,7 @@ def auth_mode_endpoint(request: Request) -> AuthModeResponse:
     )
 
 
-@router.get("/api/v1/tools", response_model=ToolListResponse, tags=["tools"])
+@router.get("/v1/tools", response_model=ToolListResponse, tags=["tools"])
 def list_tools(
     principal: Principal = Depends(get_principal),
     registry: ToolRepository = Depends(get_tool_repository),
@@ -193,7 +195,7 @@ def list_tools(
     return ToolListResponse(items=items, count=len(items))
 
 
-@router.get("/api/v1/tools/{tool_id}", response_model=ToolRecordResponse, tags=["tools"])
+@router.get("/v1/tools/{tool_id}", response_model=ToolRecordResponse, tags=["tools"])
 def get_tool(
     tool_id: str,
     principal: Principal = Depends(get_principal),
@@ -206,7 +208,7 @@ def get_tool(
     return ToolRecordResponse(**t.to_public())
 
 
-@router.get("/api/v1/configs/{tool_id}/_quota", response_model=QuotaResponse, tags=["configs"])
+@router.get("/v1/configs/{tool_id}/_quota", response_model=QuotaResponse, tags=["configs"])
 def quota(
     tool_id: str,
     principal: Principal = Depends(get_principal),
@@ -224,7 +226,7 @@ def quota(
     )
 
 
-@router.get("/api/v1/configs/{tool_id}", response_model=ConfigListResponse, tags=["configs"])
+@router.get("/v1/configs/{tool_id}", response_model=ConfigListResponse, tags=["configs"])
 def list_configs(
     tool_id: str,
     include_deleted: bool = False,
@@ -238,7 +240,7 @@ def list_configs(
     return ConfigListResponse(tool_id=tool_id, items=items, count=len(items))
 
 
-@router.get("/api/v1/configs/{tool_id}/{key}", response_model=ConfigRecordResponse, tags=["configs"])
+@router.get("/v1/configs/{tool_id}/{key}", response_model=ConfigRecordResponse, tags=["configs"])
 def get_config(
     tool_id: str,
     key: str,
@@ -258,7 +260,7 @@ def get_config(
     return resp
 
 
-@router.put("/api/v1/configs/{tool_id}/{key}", response_model=ConfigRecordResponse, tags=["configs"])
+@router.put("/v1/configs/{tool_id}/{key}", response_model=ConfigRecordResponse, tags=["configs"])
 def put_config(
     tool_id: str,
     key: str,
@@ -303,7 +305,7 @@ def put_config(
     return resp
 
 
-@router.delete("/api/v1/configs/{tool_id}/{key}", response_model=ConfigRecordResponse, tags=["configs"])
+@router.delete("/v1/configs/{tool_id}/{key}", response_model=ConfigRecordResponse, tags=["configs"])
 def delete_config(
     tool_id: str,
     key: str,

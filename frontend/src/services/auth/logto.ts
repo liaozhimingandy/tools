@@ -4,24 +4,21 @@
  * 设计要点：
  *  1. 未配置（VITE_LOGTO_ENDPOINT / APP_ID 缺失）时全部降级为空操作，
  *     绝不 new LogtoClient、绝不跳转，保证 Pages 上纯本地模式照常可用、不白屏。
- *  2. OAuth 回调落在站点根（如 /tools/?code=..&state=..），无 fragment，符合规范。
- *     hash 路由下 window.location.href 形如 .../tools/?code=..#/safekeep，
- *     SDK 用 full href 消费 code/state；成功后清理 query，避免刷新重复处理。
+ *  2. OAuth 回调落在站点根（如 /tools/?code=..&state=..）。hash 路由会在模块
+ *     导入阶段自动补 '#/'，故交给 SDK 前必须用 oauthCallbackUrl() 剥掉 fragment
+ *     （详见 callback.ts）。无论回调成功失败都清理 query，避免刷新重放。
  *  3. 只向业务层暴露 sub / accessToken / isAuthenticated，不触碰主密码与 vaultKey。
+ *  4. 不再用「本次是否刚消费回调」这种易失的模块级标志去 gate 云端恢复：
+ *     二次跳转、刷新、SDK 异步就绪都会让它丢失。恢复意图本身带 TTL 且一次性消费，
+ *     由 useSafeKeep 依据「意图 + 已登录」续做，才是可闭环的判据。
  */
 import LogtoClient from '@logto/browser'
 import { logtoConfig, type LogtoConfig } from '@/config.ts'
+import { oauthCallbackUrl } from './callback.ts'
 
 let client: LogtoClient | null = null
 /** main.ts 在挂载前 initAuth() 的结果缓存，供各视图同步读取初始登录态。 */
 let lastAuthState: AuthState | null = null
-/** 本次页面加载是否刚消费过 OAuth 回调（code/state）。供恢复意图续做判定，防刷新重复拉取。 */
-let consumedCallbackOnBoot = false
-
-/** 本次启动是否刚从 Logto 回调落地（而非普通刷新/首次打开）。 */
-export function justSignedIn(): boolean {
-  return consumedCallbackOnBoot
-}
 
 function cfg(): LogtoConfig {
   return logtoConfig()
@@ -88,11 +85,12 @@ export async function initAuth(): Promise<AuthState> {
     lastAuthState = { configured: false, authenticated: false, sub: null }
     return lastAuthState
   }
+  const isCallback = hasCallbackParams()
   try {
-    if (hasCallbackParams()) {
-      await c.handleSignInCallback(window.location.href)
-      stripCallbackParams()
-      consumedCallbackOnBoot = true
+    if (isCallback) {
+      // 关键：vue-router 的 hash history 已把回调 URL 补成 ...?state=xyz#/，
+      // 直接传 window.location.href 会让 SDK 把 '#/' 当成 state 的一部分。
+      await c.handleSignInCallback(oauthCallbackUrl(window.location.href))
     }
     const authed = await c.isAuthenticated()
     const sub = authed ? (await c.getIdTokenClaims()).sub : null
@@ -101,6 +99,9 @@ export async function initAuth(): Promise<AuthState> {
   } catch {
     lastAuthState = { configured: true, authenticated: false, sub: null }
     return lastAuthState
+  } finally {
+    // 成功或失败都要清掉临时参数：失败时若保留 code/state，刷新会反复重放同一次回调。
+    if (isCallback) stripCallbackParams()
   }
 }
 

@@ -5,13 +5,12 @@
  * 剪贴板清除、可见性监听）。业务规则全部下沉到 services/safekeep，本文件只编排。
  * 遵循 vue.md §3/§4：派生值用 computed；定时器/监听在 onMounted 建立、onUnmounted 清理。
  */
-import { computed, onMounted, onUnmounted, reactive, ref, type Ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch, type Ref } from 'vue'
 import * as VC from '@/services/safekeep/crypto.ts'
 import * as vault from '@/services/safekeep/vault.ts'
 import { useCloudSync } from '@/composables/useCloudSync.ts'
-import { justSignedIn } from '@/services/auth/logto.ts'
 import {
-  consumeRestoreIntent, clearRestoreIntent, sessionRestoreStore,
+  consumeRestoreIntent, clearRestoreIntent, hasRestoreIntent, sessionRestoreStore,
 } from '@/services/auth/restoreIntent.ts'
 import {
   LS,
@@ -49,6 +48,8 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   const useRecovery = ref(false)
   const lastBackupAt: Ref<number | null> = ref(null)
   const countdown: Ref<string> = ref('')
+  /** 云端恢复的阶段提示：让「登录 → 回跳 → 下载密文」每一步都可见，避免点了没反应。 */
+  const restoreStage: Ref<string> = ref('')
 
   const prefs = reactive<Prefs>({ idleMs: 300000, hideLock: true, clipSec: 15 })
   let lastActivity = Date.now()
@@ -328,16 +329,28 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     lastActivity = Date.now()
     startLockTimer()
   }
+  /**
+   * 销毁本机保险库并回到欢迎页（可重新创建）。
+   * 解锁页也必须能调用：主密码与恢复码都忘记时，这是唯一的出路，
+   * 否则用户永远卡在 locked 页（旧版清空入口只在需解锁后才能打开的设置弹窗里）。
+   */
   function wipe(): void {
     wipeAll(store)
+    clearRestoreIntent(sessionRestoreStore()) // 清空本机后不要再用云端密文覆盖回来
+    cloud.resetLocal() // 同步记账（cloudRev / 摘要）属于旧库，必须一并归零
+    restoreStage.value = ''
     vk.value = null
+    pending.value = null
     account.value = null
     lastBackupAt.value = null
+    failCount.value = 0
+    failHint.value = ''
     Object.keys(plain).forEach((k) => delete plain[k])
+    Object.keys(revealed).forEach((k) => delete revealed[k])
     stopLockTimer()
     dialog.value = null
     screen.value = 'welcome'
-    toast('本机数据已清空')
+    toast('本机密文已彻底清空，现在可以创建新的保险库')
   }
   function storageRaw(): string {
     return rawSnapshot(store)
@@ -355,6 +368,10 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     },
   })
 
+  // 登录态可能晚于视图挂载才就绪（SDK 异步 / OAuth 回跳二次加载）：持续观察，
+  // 一旦就绪且仍有意图就续做。resumeCloudRestore 幂等，不会重复拉取覆盖。
+  watch([cloud.authenticated, cloud.sub], () => resumeCloudRestore())
+
   // ---- 生命周期 ----
   function onVisibility(): void {
     if (typeof document === 'undefined') return
@@ -370,30 +387,38 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   }
 
   /**
-   * 云端恢复续做：仅当「本次刚从 Logto 回调落地」+「存在未过期恢复意图」+
-   * 「确实已登录」三者同时成立，才自动拉取一次。普通刷新/首次打开绝不触发，
-   * 避免静默用云端密文覆盖本机。意图在这里被消费（清除），不会重复执行。
+   * 云端恢复续做（幂等）：判据只有「存在未过期意图」+「确实已登录」。
+   *
+   * 不再要求「本次刚消费过 OAuth 回调」——那是模块级瞬时标志，二次跳转、
+   * 刷新或 SDK 异步就绪都会把它弄丢，正是本地流程断掉的原因之一。
+   * 登录态尚未就绪时**保留意图**，由 watch(cloud.authenticated) 在就绪后重试；
+   * TTL（10 分钟）+ 一次性消费保证不会静默反复覆盖本机。
    */
   function resumeCloudRestore(): void {
-    // 先判 justSignedIn 再消费意图：普通刷新直接跳过，且无论如何都清掉陈旧意图
-    if (!justSignedIn()) {
-      clearRestoreIntent(sessionRestoreStore())
+    const store = sessionRestoreStore()
+    if (!hasRestoreIntent(store)) return
+    if (!cloud.authenticated.value || !cloud.sub.value) {
+      restoreStage.value = '登录尚未完成，请在 10 分钟内重新点「从云端恢复」'
       return
     }
-    if (!consumeRestoreIntent(sessionRestoreStore())) return
-    if (!cloud.authenticated.value) {
-      toast('登录未完成，请重新点「从云端恢复」')
-      return
-    }
+    if (!consumeRestoreIntent(store)) return
+    restoreStage.value = '登录成功，正在从云端下载密文…'
     void cloud.restoreFromCloud(true).then((r) => {
-      // onApplied 已在拉取成功后 lock + 提示重新解锁，这里只兜底失败分支
-      if (r.kind === 'error' || r.kind === 'need-api' || r.kind === 'empty') toast(r.message)
+      if (r.kind === 'applied') {
+        restoreStage.value = '' // onApplied 已 lock + 提示重新解锁
+        return
+      }
+      restoreStage.value = r.message
+      toast(r.message)
     })
   }
 
-  /** 解锁页入口：把 outcome 统一转成用户提示（成功由 onApplied 接管）。 */
+  /** 解锁页入口：撤掉待续做意图避免重复拉取，并把 outcome 转成可见提示。 */
   async function restoreFromCloud(): Promise<void> {
+    clearRestoreIntent(sessionRestoreStore())
+    restoreStage.value = '正在准备云端恢复…'
     const r = await cloud.restoreFromCloud(true)
+    restoreStage.value = r.kind === 'applied' ? '' : r.message
     if (r.kind !== 'applied') toast(r.message)
   }
 
@@ -425,7 +450,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     // 状态
     screen, account, plain, revealed, busy, toastText, dialog, editorTarget,
     filter, tag, view, failCount, failHint, useRecovery, needBackup, countdown, prefs,
-    forcedChangePw, pendingRecoveryCode, prefillPassword,
+    forcedChangePw, pendingRecoveryCode, prefillPassword, restoreStage,
     // 派生
     unlocked, allItems, counts, visibleItems, typeNav, tagNav, statusText,
     // 云端同步

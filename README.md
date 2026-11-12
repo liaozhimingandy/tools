@@ -74,7 +74,7 @@ tools/
 │   ├── .dockerignore
 │   ├── app/
 │   │   ├── main.py            # 装配 + CORS + 统一错误响应 + 静态托管（/assets 与 /tools/assets）
-│   │   ├── configs.py         # 工具注册表 + 公共配置表 API 路由 + /api/auth/mode
+│   │   ├── configs.py         # 工具注册表 + 公共配置表 API 路由 + /v1/auth/mode
 │   │   ├── store.py           # ConfigRepository 协议 + Memory / Postgres 实现
 │   │   ├── tools_registry.py  # ToolRepository 协议 + Memory / Postgres 实现（全局元数据）
 │   │   ├── auth.py            # Principal + passthrough / dev / logto / stub provider
@@ -112,7 +112,7 @@ tools/
 - 锦囊的加密、解密、密钥派生全部在浏览器 Web Crypto（PBKDF2-SHA256 600k + AES-256-GCM）完成。
 - 后端把配置 `value` 当**不透明密文 blob**：只做「可 JSON 序列化 + 大小上限」校验，
   **不解析内部结构、不解密、不记录明文**，也绝不对 `value` 内容建索引。
-- `/api/version` 的 `zero_knowledge=true` 是这一契约的机器可读声明。
+- `/v1/version` 的 `zero_knowledge=true` 是这一契约的机器可读声明。
 - 任何把明文/密钥发往后端的改动都属破坏性安全变更，必须走规范评审。
 
 ### 多端密文同步模型（已实现）
@@ -193,16 +193,23 @@ tools/
 身份走 `Authorization`（logto）或 `X-User-Sub`（dev）；**无用户信息入参**。
 完整 OpenAPI 见启动后 `/docs`。
 
+> **接口前缀统一为 `/v1`，没有 `/api` 段**：`/v1/health`、`/v1/version`、
+> `/v1/auth/mode`、`/v1/tools`、`/v1/configs/*`。`VITE_API_BASE_URL` 只填域名
+> （如 `https://api.example.com`），路径由 `services/cloud/client.ts` 拼接。
+> 旧 `/api/*` 不再注册任何接口，请求会落到 SPA 回退。
+
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/api/v1/tools` | 列出启用中的工具（注册表；需鉴权，无用户数据） |
-| `GET` | `/api/v1/tools/{tool_id}` | 单个工具元信息（禁用/未注册 → 404） |
-| `GET` | `/api/v1/configs/{tool_id}` | 列出当前用户该工具下全部配置（`?include_deleted=true` 含墓碑） |
-| `GET` | `/api/v1/configs/{tool_id}/{key}` | 取单条，响应带 `ETag: W/"<rev>"` |
-| `PUT` | `/api/v1/configs/{tool_id}/{key}` | UPSERT；body `{value, expected_revision, schema_version?, updated_by_device?}`，首次创建 `expected_revision=0` |
-| `DELETE` | `/api/v1/configs/{tool_id}/{key}?expected_revision=N` | 软删除（保留同步墓碑） |
-| `GET` | `/api/v1/configs/{tool_id}/_quota` | 配额使用情况（工具覆盖值优先于全局默认） |
-| `GET` | `/api/auth/mode` | 当前鉴权模式与风险提示（`passthrough`/dev/stub 标 `secure=false`） |
+| `GET` | `/v1/health` | 健康检查（`frontend_ready` 表示 dist 是否就绪） |
+| `GET` | `/v1/version` | 应用版本 / 已装规范版本 / 零知识声明 |
+| `GET` | `/v1/tools` | 列出启用中的工具（注册表；需鉴权，无用户数据） |
+| `GET` | `/v1/tools/{tool_id}` | 单个工具元信息（禁用/未注册 → 404） |
+| `GET` | `/v1/configs/{tool_id}` | 列出当前用户该工具下全部配置（`?include_deleted=true` 含墓碑） |
+| `GET` | `/v1/configs/{tool_id}/{key}` | 取单条，响应带 `ETag: W/"<rev>"` |
+| `PUT` | `/v1/configs/{tool_id}/{key}` | UPSERT；body `{value, expected_revision, schema_version?, updated_by_device?}`，首次创建 `expected_revision=0` |
+| `DELETE` | `/v1/configs/{tool_id}/{key}?expected_revision=N` | 软删除（保留同步墓碑） |
+| `GET` | `/v1/configs/{tool_id}/_quota` | 配额使用情况（工具覆盖值优先于全局默认） |
+| `GET` | `/v1/auth/mode` | 当前鉴权模式与风险提示（`passthrough`/dev/stub 标 `secure=false`） |
 
 错误统一形状 `{"error": "<CODE>", "message": "..."}`；常见码：
 `UNAUTHORIZED`(401)、`NOT_FOUND`(404)、`REVISION_CONFLICT`/`QUOTA_EXCEEDED`(409)、
@@ -322,7 +329,7 @@ tools/
 
 - 后端**不校验身份**：任何人可伪造 `X-User-Sub` 读写/覆盖/删除他人云端密文。
 - `value` 是零知识密文，他人**无法解密**，但**完整性与可用性不受保护**（可被覆盖/删除）。
-- 风险通过 `GET /api/auth/mode` 机器可读暴露（`secure=false` + `warning`）。
+- 风险通过 `GET /v1/auth/mode` 机器可读暴露（`secure=false` + `warning`）。
 - 迁移路径：切 `TOOLS_AUTH_MODE=logto` 并配齐三件套，此时 `sub` 来自校验过的 JWT，客户端无法伪造。
   在此之前，请引导用户同时保留本地加密备份（`导出备份`）。
 
@@ -383,12 +390,15 @@ python -m app.main
 > 这一点已由真实 PG 集成自检实测确认。密码含 `@` 时**不要**裸拼进 `TOOLS_DATABASE_URL`
 > （会被当成 host 分隔符），改用 `TOOLS_PG_PASSWORD` 分散变量由 `config.py` 编码。
 >
-> **云托管库实测补充**：若只拿到有 `CREATEDB`、无 `CREATEROLE` 的应用账号（本部署即如此），
-> **只跑 `001_tool_configs.sql` 即可**：它已含完整表结构 + `FORCE ROW LEVEL SECURITY`，
-> 用非超级用户、不带 `BYPASSRLS` 的账号直连时 RLS 已实测生效（两个不同 `app.user_sub`
-> 各只能看到自己的行）。`002_app_role.sql` 的 `CREATE ROLE`、`003_migration.sql` 末尾的
-> `GRANT ... TO tools_app` 在该权限下会失败，故 `docker-compose` 的 `init-db` 已改为只跑 001。
-> 只有「有管理员权限且确有 v0.2 旧库要升级」时才需手动执行 002/003。
+> **云托管库实测补充**：本部署应用账号最初只有 `CREATEDB`、无 `CREATEROLE`；
+> 后续虽已补授 `CREATEROLE`，`docker-compose` 的 `init-db` **仍然只跑 `001_tool_configs.sql`**。
+> 现在不跑 002/003 的原因已不是权限，而是收益与风险：`002_app_role.sql` 会创建一个口令为
+> `CHANGE_ME` 占位的 `tools_app` 登录角色，而应用 DSN 仍连 `tools` 账号、根本不会切过去，
+> 自动执行只会多留一个未被使用的弱口令角色。`001` 已含完整表结构 +
+> `FORCE ROW LEVEL SECURITY`，用非超级用户、不带 `BYPASSRLS` 的账号直连时
+> RLS 已实测生效（两个不同 `app.user_sub` 各只能看到自己的行）。
+> 只有「确实要把应用切到 `tools_app` 最小权限角色（并随即 ALTER ROLE 改强密码）」
+> 或「确有 v0.2 旧库要升级」时，才由管理员手动执行 002/003。
 
 ### 本地端到端联调（前端 dev + 真实云数据库）
 
@@ -423,15 +433,64 @@ cd backend; $env:PYTHONPATH = (Resolve-Path ".deps").Path; python -m app.main
 | 环节 | 结果 |
 | --- | --- |
 | 建库 / `001` 迁移 / RLS 隔离 | 通过（alice 与 bob 互相不可见） |
-| 后端 API 端到端（17 项） | 全部通过：404→PUT 创建→GET 密文原样往返→409 CAS→更新→隔离→配额→413→软删除墓碑 |
+| 后端 `/v1` API 端到端（19 项） | 全部通过：health/version/auth-mode/tools → 404→PUT 创建→GET 密文原样往返+ETag→409 CAS→更新→配额→跨 sub 隔离→CORS 预检→软删除墓碑→旧 `/api/v1` 已非接口 |
 | 浏览器真实跨域 GET/PUT/DELETE | 通过（响应带 `Access-Control-Allow-Origin`） |
 | 欢迎页双通道 UI | 通过：本地创建 / 登录并从云端恢复 |
 | 登录跳转 + 恢复意图 | 通过：`signInSession.redirectUri` 正确、意图写入并带 10 分钟 TTL |
-| 回调落地路由归位 | 通过：`#/safekeep`，意图被消费；伪造 code 不会误触发覆盖 |
+| 回调落地（带 `?code&state`、无 fragment） | 通过：`code/state` 被清理、URL 归位 `#/safekeep`、登录未完成时**保留**意图并提示可重试 |
+| 冷启动云端恢复全链路（受控模拟登录） | 通过：真实浏览器 + 真实云库，自动 `GET /v1/configs/safekeep/vault` → 密文写入本机（`sk.account/items/rev/cloudRev`）→ 页面回到「已锁定」并提示「请用主密码重新解锁」→ 意图仅消费一次；控制台 0 错误 0 警告 |
+| 二次确认条 → 真实登录跳转 | 通过：修复后「确认覆盖并下载」「取消」均可见可点，取消后触发按钮恢复；点确认 3.5s 内跳到 `https://account.alsoapp.com/sign-in?app_id=...`，控制台 0 错误 0 警告 |
+| 忘记全部凭据后重建保险库 | 通过（单测）：`wipeAll` 清掉全部 `sk.*` → 用新主密码 `createVault/commitVault` → `unlock` 成功；浏览器点击路径待人工确认（见下方清单） |
 
 > 调试经验：本机若设了 `HTTP_PROXY`，用 Python/httpx 测本地接口须 `trust_env=False`，
 > 否则请求被代理转发成绝对 URI，后端日志出现 `GET http%3A//...` 并全部 404。
 > 浏览器不受影响（WinINET 代理关闭 + `<local>` 绕过）。
+
+### 「登录并从云端恢复」不闭环的根因（确与 `#` 路由有关，已修复）
+
+排查结论：**是 hash 路由引起的，但不是 `router.replace` 写错**，而是两处隐蔽耦合：
+
+1. `createWebHashHistory()` 在**模块导入阶段**就会给无 fragment 的 OAuth 回调 URL
+   `history.replaceState` 补上 `#/`：
+   `/tools/?code=abc&state=xyz` → `/tools/?code=abc&state=xyz#/`。
+2. `@logto/js` 的 `verifyAndParseCodeFromCallbackUri()` 用 `uri.split('?')` 把整段尾部
+   交给 `URLSearchParams`，fragment 会粘在最后一个参数值上：`state='xyz#/'`，
+   与 `signIn()` 保存的 `state` 不等 → `callback_uri_verification.state_mismatched`
+   → `handleSignInCallback` 抛错 → `initAuth()` 降级为未登录 → 恢复链路整个断掉。
+3. 另一半原因：续做曾用模块级瞬时标志 `justSignedIn()` 作门槛，二次跳转 / 刷新 /
+   SDK 异步就绪都会把它弄丢，恢复意图随即被清掉，于是「登录后什么都没发生」。
+
+修复要点：
+
+- 新增纯函数 `services/auth/callback.ts#oauthCallbackUrl()`，交给 SDK 前只保留
+  `origin + pathname + search`，显式剥掉 fragment（OAuth2 `redirect_uri` 本就禁止带 fragment，
+  SDK 也只校验前缀），让登录链路与 hash 路由解耦；单测同时给出「不修复必污染」的反例。
+- `initAuth()` 无论回调成功失败都在 `finally` 清理 `code/state`，避免刷新反复重放。
+- 恢复续做判据改为「**未过期意图 + 已登录**」；登录未就绪时保留意图，
+  由 `watch(cloud.authenticated)` 在就绪后重试。路由归位只认意图，
+  不再靠「回调 URL 有没有 hash」这种不稳定信号。
+- 解锁页新增 `restoreStage` 阶段提示，登录 / 下载 / 失败每一步都可见，
+  不再出现「点了没反应」。
+
+### 另外两处「点了没反应 / 卡死」的 UI 死锁（已修复）
+
+1. **二次确认条没有按钮**：TDesign Vue Next 的 `t-alert` 操作区插槽叫
+   **`operation`**，代码误写成 Element Plus 习惯的 `#action`，Vue 会**静默丢弃**
+   整个插槽内容。于是「确认继续？」只剩文字，而触发按钮被 `v-else` 隐藏，
+   用户点完「从云端恢复」后页面再无任何可点元素。共 4 处（解锁页云端恢复、
+   备份提醒、账号弹窗强制上传 / 强制拉取）全部改为 `#operation`；
+   新增 `tests/alert-slots.test.ts` 静态断言禁止 `#action` 回流，并校验每个
+   二次确认条都有 `#operation` + `@click` + 「取消」出口。
+   > 这类缺陷不报错、类型检查与业务单测都发现不了，只能靠模板静态守卫兜住。
+   > 新增的危险操作按钮一律放在 `t-alert` **之外**的普通 DOM，不再依赖组件插槽。
+2. **忘记主密码 + 恢复码后被永久锁死**：清空入口原本只在「设置」弹窗里，
+   而设置弹窗必须**先解锁进入主界面**才能打开 → 死锁。现在解锁页底部新增
+   「主密码和恢复码都忘了？清空本机数据，重新创建」，需输入「清空」才允许执行，
+   危险区用 `danger` 主题 + 独立 DOM。`useSafeKeep.wipe()` 同步清理内存态、
+   恢复意图与云端同步记账（`cloud.resetLocal()` 把 `cloudRev` 归零，
+   否则重建新库后 push 会拿旧库的 revision 做 CAS 误判冲突）。
+   文案明确提示：**云端旧密文不会被本机清空删除**，重建后需在账号弹窗里
+   「强制上传」覆盖，否则再次从云端恢复会把解不开的旧密文拉回来。
 
 ## 测试与验证
 
@@ -457,14 +516,16 @@ python tests/pg_integration_check.py
 cd backend ; docker compose --env-file .env config
 ```
 
-**当前基线**：前端 `53/53` 单测、`vue-tsc` 类型检查、`vite build` 全绿；
+**当前基线**：前端 `63/63` 单测、`vue-tsc` 类型检查、`vite build` 全绿；
 后端 `73/73` unittest 全绿；`docker compose config` 渲染通过；
-**真实云数据库端到端 17/17 通过**（见「本地端到端联调」表格）。
+**真实云数据库 `/v1` 端到端 19/19 通过** + 浏览器冷启动恢复闭环通过
+（见「本地端到端联调」表格）。
 
 ### 需在有外网/真实凭据的环境人工验证
 
 - [x] **真实 PG 连接 + 迁移 + RLS**：已连云库、建 `tools` 库、跑 `001`、
-      实测两个 `app.user_sub` 互相不可见。云账号无 `CREATEROLE`，故 `init-db` 已改为只跑 001。
+      实测两个 `app.user_sub` 互相不可见。云账号已补授 `CREATEROLE`，但 `init-db`
+      仍只跑 001（002 会留下未使用的弱口令角色，理由见上文）。
 - [x] **GitHub Actions 部署**：推 `main` 后 Pages 产物 `/tools/` 已可访问、资源 200、hash 路由刷新不 404。
       （首次部署需在 Settings > Pages 把 Source 选为 GitHub Actions，已实测为唯一阻塞点。）
 - [x] **本地登录跳转 + 回调归位**：Edge 实测点击「登录并从云端恢复」跳到 Logto 登录页、
@@ -477,14 +538,19 @@ cd backend ; docker compose --env-file .env config
       `http://localhost:5173/tools/`，**线上 `https://<账号>.github.io/tools/` 已被移除**，
       线上登录会报 `oidc.invalid_redirect_uri`。请把线上地址加回 Redirect URIs 与
       Post Logout Redirect URIs（保留本地地址，二者可共存）。
-- [ ] **真实 Logto 账号完成一次登录**：本环境无账号凭据，只验证到跳转与回调归位，
-      需本人用真实账号登录，确认 `sub` 落地、登出正常。
+- [ ] **真实 Logto 账号完成一次登录**：本环境无账号凭据；Edge 已实测能跳到
+      `account.alsoapp.com/sign-in` 登录页、回调 URL 归一化与意图续做也有单测覆盖，
+      仍需本人用真实账号登录，确认 `sub` 落地、登出正常。
 - [ ] **填后端地址后端到端云同步**：先在 Settings > Variables 配 `VITE_API_BASE_URL` 重部署，
       再验「检查云端 → 上传 → 另一设备拉取 → 主密码重新解锁」密文不失真，
       冲突时 `stale`/强制覆盖提示符合预期。
 - [ ] **冷启动云端恢复全链路（真实登录）**：新设备/清浏览器后，解锁页点「登录并从云端恢复」→
       Logto 跳转 → 回调落站点根 → 自动回 `#/safekeep` 并拉一次密文 → 主密码解锁；
       验证普通刷新不会重复拉取/覆盖（恢复意图仅消费一次、TTL 10 分钟）。
+- [ ] **忘记全部凭据后重建（浏览器点一遍）**：本机已有库且停在解锁页 →
+      点底部「清空本机数据，重新创建」→ 输入「清空」→ 确认后回到欢迎页 →
+      新建保险库并检查 `localStorage` 无旧密文残留；若云端曾有旧密文，
+      再验「强制上传」覆盖后从另一设备拉取的是新库。
 
 ## 工程规范与版本
 
@@ -493,7 +559,7 @@ cd backend ; docker compose --env-file .env config
 
 > 状态：适配配置已安装（v1.0.0，scope=project）：`.ai-standards/` 镜像（120 托管文件，
 > SHA-256 校验通过）、`CODEBUDDY.md`、`.codebuddy/rules/`、5 个 Skill。
-> 归属与版本见 `.ai-standards/manifest.json`。应用版本见后端 `/api/version`
+> 归属与版本见 `.ai-standards/manifest.json`。应用版本见后端 `/v1/version`
 > （`app_version` 本工具集 / `standards_version` 已装规范，统一记录）。
 > 升级：`python E:\temp\a\ai-engineering-standards\tooling\scripts\install.py --tool workbuddy --scope project --target E:\temp\tools --force`
 

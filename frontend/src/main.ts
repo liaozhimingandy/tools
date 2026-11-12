@@ -24,14 +24,14 @@ async function boot(): Promise<void> {
   } catch {
     /* 任何意外都降级：不阻断挂载，保证绝不白屏 */
   }
-  // 「从云端恢复」登录回跳：OAuth 回调必落在站点根（无 fragment），
-  // 若存在未消费的恢复意图，把路由定位回锦囊，让 useSafeKeep 挂载后续做拉取。
-  // 意图的消费与过期由 useSafeKeep.onMounted 负责，这里只做路由归位，绝不重复拉取。
+  // 「从云端恢复」登录回跳：只要存在未消费的恢复意图，就把路由定位回锦囊，
+  // 让 useSafeKeep 依据「意图 + 已登录」续做拉取。这里只做路由归位，不消费意图、不拉取。
   //
-  // ⚠️ 必须用 router.replace 而不是 window.history.replaceState：
-  // createWebHashHistory() 在模块导入时就缓存了初始 location（回调 URL 无 hash → 解析为 '/'），
-  // 挂载时 router 的初始导航会把我们直接改写的 hash 覆盖回 '#/'，导致停在门户、续做不触发。
-  // 走 router API 才能让内部状态与 URL 同步。
+  // 两个历史坑（都已规避）：
+  //  1) createWebHashHistory() 在模块导入阶段就把无 fragment 的回调 URL 补成 '...#/'，
+  //     所以不能靠「回调 URL 有没有 hash」判断是否归位，只认意图本身；
+  //  2) 必须用 router.replace 而不是 window.history.replaceState：router 缓存了初始
+  //     location，直接改写 hash 会被初始导航覆盖回 '#/'，导致停在门户、续做不触发。
   const needRestore =
     typeof window !== 'undefined' &&
     hasRestoreIntent(sessionRestoreStore()) &&

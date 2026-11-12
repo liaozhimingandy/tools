@@ -1,7 +1,7 @@
 /**
  * 公共配置表 HTTP 客户端（零知识同步的网络层）。
  *
- * 契约（对齐后端 /api/v1/configs/{tool_id}/{key}）：
+ * 契约（对齐后端 /v1/configs/{tool_id}/{key}）：
  *  - 身份：X-User-Sub 头 = 前端 Logto 登录拿到的 sub；本阶段后端 passthrough 不校验签名，
  *    但前端「有登录信息才构造客户端」，作为软门禁。切 logto 模式时后端自行校验 Bearer。
  *  - value：不透明密文 blob，本层不解析、不记录内容。
@@ -61,7 +61,7 @@ function endpoint(opts: CloudClientOptions): string {
   if (!apiBase) {
     throw new CloudError('云端同步未启用（缺少 VITE_API_BASE_URL）', 'NOT_CONFIGURED', 0)
   }
-  return `${apiBase}/api/v1/configs/${TOOL_ID}/${VAULT_KEY}`
+  return `${apiBase}/v1/configs/${TOOL_ID}/${VAULT_KEY}`
 }
 
 async function headers(opts: CloudClientOptions): Promise<Record<string, string>> {

@@ -3,7 +3,7 @@
 #   1) cp .env.example .env  并填入真实数据库口令等；
 #   2) docker compose up -d --build
 #      init-db 会先幂等执行 sql/001_tool_configs.sql 建表，成功后 api 才启动。
-#   3) docker compose logs -f api 观察启动；/api/health 做健康检查。
+#   3) docker compose logs -f api 观察启动；/v1/health 做健康检查。
 #
 # 数据库在云厂商托管（TOOLS_PG_HOST:TOOLS_PG_PORT，6432 通常是 PgBouncer 连接池端口），
 # 不在本 compose 里再起一个 postgres，避免双写与端口冲突。

@@ -146,14 +146,14 @@ async function onPush(force = false): Promise<void> {
       <!-- 强制覆盖二次确认 -->
       <t-alert v-if="confirmForcePush" theme="warning" class="my-3">
         <template #message>云端有另一个设备更新的版本。<b>强制上传会用本机密文覆盖它</b>，其他设备随后需重新拉取。确认继续？</template>
-        <template #action>
+        <template #operation>
           <t-button size="small" theme="warning" @click="onPush(true)">确认覆盖云端</t-button>
           <t-button size="small" variant="text" @click="confirmForcePush = false">取消</t-button>
         </template>
       </t-alert>
       <t-alert v-if="confirmPull" theme="warning" class="my-3">
         <template #message>拉取会<b>用云端密文覆盖本机</b>，本机较新的未同步条目可能丢失。建议先导出本地备份。确认继续？</template>
-        <template #action>
+        <template #operation>
           <t-button size="small" theme="warning" :loading="cloud.busy.value" @click="onPull(true)">确认覆盖本机</t-button>
           <t-button size="small" variant="text" @click="confirmPull = false">取消</t-button>
         </template>

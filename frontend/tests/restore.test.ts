@@ -16,6 +16,7 @@ import {
   markRestoreIntent, hasRestoreIntent, consumeRestoreIntent, clearRestoreIntent,
   shouldRestoreRoute, RESTORE_INTENT_TTL_MS,
 } from '../src/services/auth/restoreIntent.ts'
+import { oauthCallbackUrl } from '../src/services/auth/callback.ts'
 import { memoryStorage } from '../src/services/safekeep/storage.ts'
 
 // --------------------------------------------------------------------------- #
@@ -117,9 +118,48 @@ test('恢复意图：clear 直接清除（登录失败 / 取消恢复时用）',
 })
 
 // --------------------------------------------------------------------------- #
+// OAuth 回调 URL：hash 路由补 fragment 后不能污染 SDK 解析的 state
+// 回归根因：createWebHashHistory() 在模块导入阶段把 /tools/?code=..&state=xyz
+// 补成 /tools/?code=..&state=xyz#/；@logto/js 用 split('?') 解析整段尾部，
+// 于是 state='xyz#/' 校验失败 → 登录态为 false → 云端恢复链路断裂。
+// --------------------------------------------------------------------------- #
+
+/** 复刻 @logto/js parseUriParameters 的字符串切分行为，用于验证污染确实存在。 */
+function sdkState(href: string): string | null {
+  return new URLSearchParams(href.split('?')[1] ?? '').get('state')
+}
+
+test('oauthCallbackUrl：剥掉 fragment，state 与 code 保持原值', () => {
+  const href = 'http://localhost:5173/tools/?code=abc123&state=xyz789#/'
+  const clean = oauthCallbackUrl(href)
+  assert.equal(clean, 'http://localhost:5173/tools/?code=abc123&state=xyz789')
+  assert.ok(!clean.includes('#'))
+  assert.equal(sdkState(clean), 'xyz789')
+  assert.equal(new URLSearchParams(clean.split('?')[1]).get('code'), 'abc123')
+})
+
+test('oauthCallbackUrl：未污染的 href 反例（证明修复不是空操作）', () => {
+  const href = 'http://localhost:5173/tools/?code=abc123&state=xyz789#/'
+  assert.equal(sdkState(href), 'xyz789#/') // 直接传 window.location.href 必然 state_mismatched
+  assert.notEqual(sdkState(href), 'xyz789')
+})
+
+test('oauthCallbackUrl：回调带 #/safekeep、带额外 query、线上 Pages 均正确', () => {
+  const cases: Array<[string, string]> = [
+    ['http://localhost:5173/tools/?code=c&state=s#/safekeep', 'http://localhost:5173/tools/?code=c&state=s'],
+    ['https://liaozhimingandy.github.io/tools/?code=c&state=s&iss=x#/', 'https://liaozhimingandy.github.io/tools/?code=c&state=s&iss=x'],
+    ['http://localhost:5173/tools/?state=s&code=c#/', 'http://localhost:5173/tools/?state=s&code=c'],
+  ]
+  for (const [href, expected] of cases) {
+    assert.equal(oauthCallbackUrl(href), expected)
+    assert.equal(sdkState(oauthCallbackUrl(href)), 's')
+  }
+})
+
+// --------------------------------------------------------------------------- #
 // 回调落地后的路由归位判定
-// 回归：OAuth 回调落在站点根（无 fragment）时，必须把路由定位回锦囊；
-// 用户已经在锦囊或其它子页时不改路由，避免打断当前位置。
+// 回归：回调 URL 的 hash 形态不稳定（router 会补 '#/'、Logto 可能保留原 hash），
+// 因此只要不在锦囊页，一律归位到锦囊，避免停在门户导致续做视图根本没挂载。
 // --------------------------------------------------------------------------- #
 
 test('shouldRestoreRoute：回调落在站点根 / 门户时需要归位', () => {
@@ -128,8 +168,9 @@ test('shouldRestoreRoute：回调落在站点根 / 门户时需要归位', () =>
   assert.equal(shouldRestoreRoute('#/'), true)
 })
 
-test('shouldRestoreRoute：已在锦囊或其它子页时保持原位', () => {
+test('shouldRestoreRoute：其它子页也要归位，已在锦囊页则跳过', () => {
   assert.equal(shouldRestoreRoute('#/safekeep'), false)
   assert.equal(shouldRestoreRoute('#/safekeep?tab=x'), false)
-  assert.equal(shouldRestoreRoute('#/404'), false)
+  assert.equal(shouldRestoreRoute('#/404'), true)
+  assert.equal(shouldRestoreRoute('#/'), true)
 })

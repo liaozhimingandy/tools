@@ -4,7 +4,7 @@
   - 存储层：CRUD、乐观锁 CAS、软删除、多租户/多工具隔离、零知识（value 原样存取且不解析）。
   - 鉴权层：user_sub 唯一来自 provider；dev 头缺失拒绝；stub 固定身份；Logto fail-closed。
   - API 层：响应 schema 稳定、ETag、配额、错误码统一、越权不可指定他人身份、
-            /api/auth/mode 风险提示、旧元信息接口回归。
+            /v1/auth/mode 风险提示、旧元信息接口回归。
 测试不依赖真实 PG、真实 JWT 租户或真实时钟。
 """
 
@@ -177,7 +177,7 @@ class _BaseAPITest(unittest.TestCase):
 
 class TestConfigAPI(_BaseAPITest):
     def test_list_empty(self) -> None:
-        r = self.client.get("/api/v1/configs/safekeep")
+        r = self.client.get("/v1/configs/safekeep")
         self.assertEqual(r.status_code, 200)
         body = r.json()
         self.assertEqual(body["tool_id"], "safekeep")
@@ -186,7 +186,7 @@ class TestConfigAPI(_BaseAPITest):
 
     def test_put_then_get_with_etag(self) -> None:
         r = self.client.put(
-            "/api/v1/configs/safekeep/vault",
+            "/v1/configs/safekeep/vault",
             json={"value": CIPHER_BLOB, "expected_revision": 0},
         )
         self.assertEqual(r.status_code, 200)
@@ -196,42 +196,42 @@ class TestConfigAPI(_BaseAPITest):
         self.assertEqual(body["value"], CIPHER_BLOB)  # 零知识：原样回显密文
         self.assertNotIn("user_sub", body)  # 归属用户不下发、不由客户端指定
 
-        g = self.client.get("/api/v1/configs/safekeep/vault")
+        g = self.client.get("/v1/configs/safekeep/vault")
         self.assertEqual(g.status_code, 200)
         self.assertEqual(g.json()["value"], CIPHER_BLOB)
 
     def test_update_requires_correct_revision(self) -> None:
-        self.client.put("/api/v1/configs/safekeep/k", json={"value": {"v": 1}, "expected_revision": 0})
-        ok = self.client.put("/api/v1/configs/safekeep/k", json={"value": {"v": 2}, "expected_revision": 1})
+        self.client.put("/v1/configs/safekeep/k", json={"value": {"v": 1}, "expected_revision": 0})
+        ok = self.client.put("/v1/configs/safekeep/k", json={"value": {"v": 2}, "expected_revision": 1})
         self.assertEqual(ok.status_code, 200)
         self.assertEqual(ok.json()["revision"], 2)
         conflict = self.client.put(
-            "/api/v1/configs/safekeep/k", json={"value": {"v": 3}, "expected_revision": 1}
+            "/v1/configs/safekeep/k", json={"value": {"v": 3}, "expected_revision": 1}
         )
         self.assertEqual(conflict.status_code, 409)
         self.assertEqual(conflict.json()["error"], "REVISION_CONFLICT")
         self.assertEqual(conflict.json()["detail"]["actual"], 2)
 
     def test_delete_soft_and_requires_revision(self) -> None:
-        self.client.put("/api/v1/configs/safekeep/k", json={"value": {"v": 1}, "expected_revision": 0})
-        missing_rev = self.client.delete("/api/v1/configs/safekeep/k")
+        self.client.put("/v1/configs/safekeep/k", json={"value": {"v": 1}, "expected_revision": 0})
+        missing_rev = self.client.delete("/v1/configs/safekeep/k")
         self.assertEqual(missing_rev.status_code, 422)  # expected_revision 必填
-        d = self.client.delete("/api/v1/configs/safekeep/k?expected_revision=1")
+        d = self.client.delete("/v1/configs/safekeep/k?expected_revision=1")
         self.assertEqual(d.status_code, 200)
         self.assertIsNotNone(d.json()["deleted_at"])
-        self.assertEqual(self.client.get("/api/v1/configs/safekeep/k").status_code, 404)
+        self.assertEqual(self.client.get("/v1/configs/safekeep/k").status_code, 404)
 
     def test_cross_user_and_cross_tool_isolation_via_api(self) -> None:
-        self.client.put("/api/v1/configs/safekeep/k", json={"value": {"secret": "x"}, "expected_revision": 0})
+        self.client.put("/v1/configs/safekeep/k", json={"value": {"secret": "x"}, "expected_revision": 0})
         # 切到另一个 stub 身份
         app.state.auth_provider = StubProvider("another-user")
-        self.assertEqual(self.client.get("/api/v1/configs/safekeep").json()["count"], 0)
-        self.assertEqual(self.client.get("/api/v1/configs/safekeep/k").status_code, 404)
+        self.assertEqual(self.client.get("/v1/configs/safekeep").json()["count"], 0)
+        self.assertEqual(self.client.get("/v1/configs/safekeep/k").status_code, 404)
 
     def test_cannot_choose_own_identity_from_body_or_query(self) -> None:
         """越权防线：body/query 里的 user_id 一律被忽略，归属只由 provider 决定。"""
         self.client.put(
-            "/api/v1/configs/safekeep/k?user_id=victim",
+            "/v1/configs/safekeep/k?user_id=victim",
             json={"value": {"v": 1}, "expected_revision": 0, "user_id": "victim", "user_sub": "victim"},
         )
         self.assertIsNotNone(self.repo.get("test-user", "safekeep", "k"))
@@ -239,19 +239,19 @@ class TestConfigAPI(_BaseAPITest):
             self.repo.get("victim", "safekeep", "k")
 
     def test_invalid_ids_and_value_size(self) -> None:
-        self.assertEqual(self.client.put("/api/v1/configs/BAD!/k", json={"value": 1, "expected_revision": 0}).status_code, 400)
-        self.assertEqual(self.client.put("/api/v1/configs/safekeep/_quota", json={"value": 1, "expected_revision": 0}).status_code, 400)
+        self.assertEqual(self.client.put("/v1/configs/BAD!/k", json={"value": 1, "expected_revision": 0}).status_code, 400)
+        self.assertEqual(self.client.put("/v1/configs/safekeep/_quota", json={"value": 1, "expected_revision": 0}).status_code, 400)
         huge = "x" * (600 * 1024)
-        r = self.client.put("/api/v1/configs/safekeep/k", json={"value": huge, "expected_revision": 0})
+        r = self.client.put("/v1/configs/safekeep/k", json={"value": huge, "expected_revision": 0})
         self.assertEqual(r.status_code, 413)
         self.assertEqual(r.json()["error"], "VALUE_TOO_LARGE")
 
     def test_unserializable_value_rejected(self) -> None:
-        r = self.client.put("/api/v1/configs/safekeep/k", json={"value": "ok", "expected_revision": 0})
+        r = self.client.put("/v1/configs/safekeep/k", json={"value": "ok", "expected_revision": 0})
         self.assertEqual(r.status_code, 200)
 
     def test_quota_endpoint(self) -> None:
-        r = self.client.get("/api/v1/configs/safekeep/_quota")
+        r = self.client.get("/v1/configs/safekeep/_quota")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["max_keys"], 200)
         self.assertEqual(r.json()["max_value_bytes"], 524288)
@@ -263,22 +263,22 @@ class TestConfigAPI(_BaseAPITest):
 
         self.registry.seed(ToolRecord("notes", "便签", "", "", True, 0, None, None, "s", "s"))
         with mock.patch.object(cfg, "allowed_tool_ids", return_value={"safekeep"}):
-            r = self.client.get("/api/v1/configs/notes")
+            r = self.client.get("/v1/configs/notes")
         self.assertEqual(r.status_code, 404)
         self.assertEqual(r.json()["error"], "TOOL_NOT_FOUND")
 
     def test_missing_dev_header_returns_401_when_dev_mode(self) -> None:
         app.state.auth_provider = DevHeaderProvider()
-        r = self.client.get("/api/v1/configs/safekeep")
+        r = self.client.get("/v1/configs/safekeep")
         self.assertEqual(r.status_code, 401)
         self.assertEqual(r.json()["error"], "UNAUTHORIZED")
-        ok = self.client.get("/api/v1/configs/safekeep", headers={"X-User-Sub": "bob"})
+        ok = self.client.get("/v1/configs/safekeep", headers={"X-User-Sub": "bob"})
         self.assertEqual(ok.status_code, 200)
 
     def test_new_fields_roundtrip_and_device_is_metadata_not_value(self) -> None:
         """schema_version/device 随 API 往返；device 不混入 value（零知识内容不变）。"""
         r = self.client.put(
-            "/api/v1/configs/safekeep/vault",
+            "/v1/configs/safekeep/vault",
             json={
                 "value": CIPHER_BLOB, "expected_revision": 0,
                 "schema_version": 9, "updated_by_device": "chrome-win",
@@ -289,13 +289,13 @@ class TestConfigAPI(_BaseAPITest):
         self.assertEqual(body["schema_version"], 9)
         self.assertEqual(body["updated_by_device"], "chrome-win")
         self.assertEqual(body["value"], CIPHER_BLOB)  # value 原样，device 未渗入
-        g = self.client.get("/api/v1/configs/safekeep/vault").json()
+        g = self.client.get("/v1/configs/safekeep/vault").json()
         self.assertEqual((g["schema_version"], g["updated_by_device"]), (9, "chrome-win"))
         self.assertEqual(g["revision"], 1)  # revision 独立，仍是 1
 
     def test_new_fields_defaults(self) -> None:
         r = self.client.put(
-            "/api/v1/configs/safekeep/k", json={"value": {"a": 1}, "expected_revision": 0}
+            "/v1/configs/safekeep/k", json={"value": {"a": 1}, "expected_revision": 0}
         )
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["schema_version"], 1)
@@ -304,14 +304,14 @@ class TestConfigAPI(_BaseAPITest):
     def test_invalid_schema_version_and_long_device_rejected(self) -> None:
         self.assertEqual(
             self.client.put(
-                "/api/v1/configs/safekeep/k",
+                "/v1/configs/safekeep/k",
                 json={"value": 1, "expected_revision": 0, "schema_version": 0},
             ).status_code,
             422,
         )
         self.assertEqual(
             self.client.put(
-                "/api/v1/configs/safekeep/k",
+                "/v1/configs/safekeep/k",
                 json={"value": 1, "expected_revision": 0, "updated_by_device": "d" * 200},
             ).status_code,
             422,
@@ -319,12 +319,12 @@ class TestConfigAPI(_BaseAPITest):
 
     def test_registry_gate_blocks_unregistered_and_disabled_tools(self) -> None:
         """注册表是工具准入权威：未注册 / 已禁用 → 404。"""
-        self.assertEqual(self.client.get("/api/v1/configs/ghosttool").status_code, 404)
+        self.assertEqual(self.client.get("/v1/configs/ghosttool").status_code, 404)
         self.registry.seed(ToolRecord("retired", "退役", "", "", False, 0, None, None, "s", "s"))
-        self.assertEqual(self.client.get("/api/v1/configs/retired").status_code, 404)
+        self.assertEqual(self.client.get("/v1/configs/retired").status_code, 404)
         self.assertEqual(
             self.client.put(
-                "/api/v1/configs/retired/k", json={"value": 1, "expected_revision": 0}
+                "/v1/configs/retired/k", json={"value": 1, "expected_revision": 0}
             ).status_code,
             404,
         )
@@ -332,24 +332,24 @@ class TestConfigAPI(_BaseAPITest):
     def test_tool_quota_overrides_global_defaults(self) -> None:
         """注册表的非 NULL 配额覆盖全局；配额/大小上限都生效。"""
         self.registry.seed(ToolRecord("safekeep", "锦囊", "", "", True, 10, 2, 16, "s", "s"))
-        q = self.client.get("/api/v1/configs/safekeep/_quota").json()
+        q = self.client.get("/v1/configs/safekeep/_quota").json()
         self.assertEqual((q["max_keys"], q["max_value_bytes"]), (2, 16))
-        self.client.put("/api/v1/configs/safekeep/k1", json={"value": {"x": 1}, "expected_revision": 0})
-        self.client.put("/api/v1/configs/safekeep/k2", json={"value": {"x": 1}, "expected_revision": 0})
+        self.client.put("/v1/configs/safekeep/k1", json={"value": {"x": 1}, "expected_revision": 0})
+        self.client.put("/v1/configs/safekeep/k2", json={"value": {"x": 1}, "expected_revision": 0})
         # 第 3 个 key 触发配额上限
-        r = self.client.put("/api/v1/configs/safekeep/k3", json={"value": {"x": 1}, "expected_revision": 0})
+        r = self.client.put("/v1/configs/safekeep/k3", json={"value": {"x": 1}, "expected_revision": 0})
         self.assertEqual(r.status_code, 409)
         self.assertEqual(r.json()["error"], "QUOTA_EXCEEDED")
         # 单条大小超工具覆盖上限 16 字节
         big = self.client.put(
-            "/api/v1/configs/safekeep/k", json={"value": "x" * 100, "expected_revision": 0}
+            "/v1/configs/safekeep/k", json={"value": "x" * 100, "expected_revision": 0}
         )
         self.assertEqual(big.status_code, 413)
 
 
 class TestToolsAPI(_BaseAPITest):
     def test_list_tools_returns_enabled_seed(self) -> None:
-        r = self.client.get("/api/v1/tools")
+        r = self.client.get("/v1/tools")
         self.assertEqual(r.status_code, 200)
         body = r.json()
         self.assertEqual(body["count"], 1)
@@ -357,22 +357,22 @@ class TestToolsAPI(_BaseAPITest):
         self.assertTrue(body["items"][0]["enabled"])
 
     def test_get_tool_and_hidden_when_disabled(self) -> None:
-        r = self.client.get("/api/v1/tools/safekeep")
+        r = self.client.get("/v1/tools/safekeep")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["name"], "锦囊")
         self.registry.seed(ToolRecord("gone", "下架", "", "", False, 0, None, None, "s", "s"))
-        self.assertEqual(self.client.get("/api/v1/tools/gone").status_code, 404)
+        self.assertEqual(self.client.get("/v1/tools/gone").status_code, 404)
 
     def test_tools_requires_auth(self) -> None:
         app.state.auth_provider = DevHeaderProvider()
-        self.assertEqual(self.client.get("/api/v1/tools").status_code, 401)
+        self.assertEqual(self.client.get("/v1/tools").status_code, 401)
         self.assertEqual(
-            self.client.get("/api/v1/tools", headers={"X-User-Sub": "bob"}).status_code, 200
+            self.client.get("/v1/tools", headers={"X-User-Sub": "bob"}).status_code, 200
         )
 
     def test_tools_carry_no_user_data(self) -> None:
         """工具清单是全局元数据：字段形状固定，不含 user_sub / value / 密文字段。"""
-        item = self.client.get("/api/v1/tools").json()["items"][0]
+        item = self.client.get("/v1/tools").json()["items"][0]
         self.assertEqual(
             set(item.keys()),
             {
@@ -384,7 +384,7 @@ class TestToolsAPI(_BaseAPITest):
 
 class TestAuthModeAndRegression(_BaseAPITest):
     def test_auth_mode_exposes_risk(self) -> None:
-        r = self.client.get("/api/auth/mode")
+        r = self.client.get("/v1/auth/mode")
         self.assertEqual(r.status_code, 200)
         body = r.json()
         self.assertEqual(body["mode"], "stub")
@@ -394,16 +394,16 @@ class TestAuthModeAndRegression(_BaseAPITest):
     def test_auth_mode_secure_when_logto_configured(self) -> None:
         app.state.auth_provider = LogtoJWTProvider(issuer="https://x/oidc", audience="api", jwks_url="https://x/jwks")
         app.state.logto_configured = True
-        body = self.client.get("/api/auth/mode").json()
+        body = self.client.get("/v1/auth/mode").json()
         self.assertEqual(body["mode"], "logto")
         self.assertTrue(body["secure"])
         self.assertTrue(body["logto_configured"])
 
     def test_meta_endpoints_still_work(self) -> None:
-        self.assertEqual(self.client.get("/api/health").status_code, 200)
-        v = self.client.get("/api/version").json()
+        self.assertEqual(self.client.get("/v1/health").status_code, 200)
+        v = self.client.get("/v1/version").json()
         self.assertTrue(v["zero_knowledge"])
-        self.assertEqual(self.client.get("/api/definitely-not-a-route").json()["error"], "NOT_FOUND")
+        self.assertEqual(self.client.get("/v1/definitely-not-a-route").json()["error"], "NOT_FOUND")
 
 
 if __name__ == "__main__":

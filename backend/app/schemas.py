@@ -19,7 +19,7 @@ class ServiceStatus(str, Enum):
 
 
 class HealthResponse(BaseModel):
-    """GET /api/health 的响应。"""
+    """GET /v1/health 的响应。"""
 
     status: ServiceStatus
     frontend_ready: bool = Field(
@@ -28,7 +28,7 @@ class HealthResponse(BaseModel):
 
 
 class VersionResponse(BaseModel):
-    """GET /api/version 的响应。
+    """GET /v1/version 的响应。
 
     standards_version 来自 ai-engineering-standards 的 VERSION，用于跨空间统一记录规范版本；
     app_version 是本工具集版本。后端不读取也不返回任何用户数据。
@@ -76,7 +76,7 @@ KEY_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
 
 
 class ConfigPutRequest(BaseModel):
-    """PUT /api/v1/configs/{tool_id}/{key} 请求体。
+    """PUT /v1/configs/{tool_id}/{key} 请求体。
 
     value 是不透明密文 blob（后端不解析、不解密、原样存取）。
     expected_revision：乐观锁期望版本；首次创建用 0，更新用当前 revision。
@@ -160,7 +160,7 @@ class QuotaResponse(BaseModel):
 
 
 class AuthModeResponse(BaseModel):
-    """GET /api/auth/mode：暴露当前鉴权模式与风险提示。"""
+    """GET /v1/auth/mode：暴露当前鉴权模式与风险提示。"""
 
     mode: str
     secure: bool = Field(description="dev/stub 为 false；logto 且已配置为 true")

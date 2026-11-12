@@ -10,6 +10,11 @@
  * 用 sessionStorage（登录是同一标签页会话内的事），带 TTL 防止陈旧意图：
  * 用户中途关闭/搁置太久，回来不会静默用云端覆盖本机。
  *
+ * 续做判据只看「意图 + 已登录」，不看「本次是否刚消费过 OAuth 回调」：
+ * 后者是模块级瞬时变量，二次跳转 / 刷新 / SDK 异步就绪都会把它弄丢，
+ * 正是本地「点了恢复、登录后没反应」的另一半原因。TTL + 一次性消费已经
+ * 足以防止静默重复覆盖，无需再加易失标志。
+ *
  * 纯逻辑 + 可注入 StorageAdapter，不碰 SDK / DOM / Vue，可在 node --test 下直测。
  */
 import type { StorageAdapter } from '../safekeep/storage.ts'
@@ -84,11 +89,14 @@ export function clearRestoreIntent(store: StorageAdapter): void {
 }
 
 /**
- * 回调落在站点根时，是否应把路由归位到锦囊解锁页。
+ * 回调落地后是否应把路由归位到锦囊解锁页。
  *
- * 纯函数，便于 node --test 覆盖。只认「没有 hash / 仍旧是门户」三种形态；
- * 用户已经在 #/safekeep 或其它子页时不改路由，避免打断当前位置。
+ * 纯函数，便于 node --test 覆盖。回调 URL 的 hash 形态并不稳定：vue-router
+ * 的 hash history 会在模块导入阶段自动补 '#/'，Logto 也可能保留登录前的
+ * '#/safekeep'，甚至用户中途切到了别的子页。因此除「已经在锦囊页」外，
+ * 一律归位——只要意图存在，就必须回到能执行恢复的那个视图。
+ * 已在锦囊页时返回 false，避免一次多余的幂等 replace。
  */
 export function shouldRestoreRoute(hash: string): boolean {
-  return !hash || hash === '/' || hash === '#/'
+  return !/^#\/safekeep(?:[?#]|$)/.test(hash)
 }

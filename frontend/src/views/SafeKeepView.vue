@@ -40,6 +40,14 @@ function doUnlock(recovery: boolean): void {
   void sk.unlock(recovery ? recoverCode.value : recoverPw.value, recovery)
   if (!recovery) recoverPw.value = ''
 }
+/**
+ * 解锁页的「销毁并重新开始」通道。
+ * 主密码与恢复码都遗忘时，用户永远进不了主界面，也就够不到设置弹窗里的清空按钮；
+ * 这里必须独立可达。输入确认词后才允许执行，防止误触导致密文永久丢失。
+ */
+const WIPE_CONFIRM_WORD = '清空'
+const confirmWipe = ref(false)
+const wipeWord = ref('')
 /** 本机已有库时，云端覆盖会丢未同步条目，需二次确认 */
 const confirmCloudRestore = ref(false)
 async function onCloudRestore(forceOverride: boolean): Promise<void> {
@@ -89,6 +97,18 @@ function onUsePassword(value: string): void {
 function onWipe(): void {
   sk.dialog.value = null
   sk.wipe()
+}
+function cancelWipe(): void {
+  confirmWipe.value = false
+  wipeWord.value = ''
+}
+function onWipeFromLocked(): void {
+  if (wipeWord.value.trim() !== WIPE_CONFIRM_WORD) return
+  cancelWipe()
+  lockedByCode.value = false
+  recoverPw.value = ''
+  recoverCode.value = ''
+  onWipe()
 }
 function revealToggle(id: string): void {
   sk.revealed[id] = !sk.revealed[id]
@@ -162,6 +182,7 @@ watch(() => sk.screen.value, (s) => {
             >
               <CloudIcon class="mr-1" /> {{ sk.cloud.authenticated.value ? '从云端下载并恢复' : '登录并从云端恢复' }}
             </t-button>
+            <t-alert v-if="sk.restoreStage.value" theme="info" class="!mt-3" :closable="false">{{ sk.restoreStage.value }}</t-alert>
             <p class="hint !mt-2">若云端还没有数据，可先在原设备「账号与云端同步」里上传一次；或直接用上方「从备份恢复」导入加密备份文件。</p>
           </div>
         </template>
@@ -216,7 +237,7 @@ watch(() => sk.screen.value, (s) => {
           <t-divider class="my-4">或</t-divider>
           <t-alert v-if="confirmCloudRestore" theme="warning" class="my-3">
             <template #message>从云端恢复会<b>用云端密文覆盖这台设备的全部条目</b>，本机尚未同步的改动会丢失。建议先导出一份本地备份。确认继续？</template>
-            <template #action>
+            <template #operation>
               <t-button size="small" theme="warning" :loading="sk.cloud.busy.value" @click="onCloudRestore(true)">确认覆盖并下载</t-button>
               <t-button size="small" variant="text" @click="confirmCloudRestore = false">取消</t-button>
             </template>
@@ -224,7 +245,38 @@ watch(() => sk.screen.value, (s) => {
           <t-button v-else variant="outline" theme="primary" block :loading="sk.cloud.busy.value" @click="onCloudRestore(false)">
             <DownloadIcon class="mr-1" /> {{ sk.cloud.authenticated.value ? '从云端下载并恢复' : '登录并从云端恢复' }}
           </t-button>
+          <t-alert v-if="sk.restoreStage.value" theme="info" class="!mt-3" :closable="false">{{ sk.restoreStage.value }}</t-alert>
         </template>
+
+        <!--
+          最后一道出路：主密码 + 恢复码都遗忘时，不必被旧库永久锁死。
+          旧版清空入口只在「设置」弹窗里，而那个弹窗必须先解锁才能打开 —— 死锁。
+          操作按钮刻意放在 t-alert 之外，避免再出现插槽名写错导致按钮静默消失。
+        -->
+        <t-divider class="my-4" />
+        <p class="hint !mb-0">
+          <a href="#" @click.prevent="confirmWipe = true">主密码和恢复码都忘了？清空本机数据，重新创建</a>
+        </p>
+        <div v-if="confirmWipe" class="wipe-zone mt-3">
+          <t-alert theme="error" :closable="false">
+            <template #message>
+              这会<b>永久删除这台设备上的全部密文</b>，不可撤销。没有主密码或恢复码，这些密文本来也解不开。
+              若曾开启云端同步，云端仍保留旧密文：重新创建后请在「账号与云端同步」里强制上传覆盖它。
+            </template>
+          </t-alert>
+          <label class="field-label mt-3">输入「{{ WIPE_CONFIRM_WORD }}」以确认</label>
+          <t-input
+            v-model="wipeWord"
+            :placeholder="'请输入 ' + WIPE_CONFIRM_WORD"
+            autocomplete="off"
+            :spellcheck="false"
+            @enter="onWipeFromLocked"
+          />
+          <div class="flex gap-2 mt-3">
+            <t-button theme="danger" class="flex-1" :disabled="wipeWord.trim() !== WIPE_CONFIRM_WORD" @click="onWipeFromLocked">确认清空并重新开始</t-button>
+            <t-button theme="default" variant="outline" @click="cancelWipe">取消</t-button>
+          </div>
+        </div>
       </section>
 
       <!-- 主界面 -->
@@ -233,7 +285,7 @@ watch(() => sk.screen.value, (s) => {
           <template #message>
             {{ sk.account.value?.lastBackupAt ? '距上次导出备份已超过 7 天（' + fmtTime(sk.account.value.lastBackupAt) + '）。本地存储可能被浏览器清理，请导出一份加密备份。' : '还没有导出过备份。本版本数据只存在这台设备，建议现在导出一份加密备份文件。' }}
           </template>
-          <template #action>
+          <template #operation>
             <t-button size="small" theme="warning" @click="sk.dialog.value = 'backup'">立即导出备份</t-button>
           </template>
         </t-alert>

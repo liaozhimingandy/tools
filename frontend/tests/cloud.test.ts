@@ -150,7 +150,7 @@ test('fetchVault：404 -> null，且带 X-User-Sub / Bearer 头', async () => {
 test('fetchVault：200 -> RemoteVault（value 经严格校验）', async () => {
   const blob = buildCloudBlob(makeAccount(), makeItems(), 5, 10)
   const f = (async (url: string) => {
-    assert.equal(url, `${BASE}/api/v1/configs/safekeep/vault`)
+    assert.equal(url, `${BASE}/v1/configs/safekeep/vault`)
     return jsonResp(200, okRecord(blob, 2))
   }) as typeof fetch
   const r = await fetchVault(opts({ fetchImpl: f }))

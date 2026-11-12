@@ -94,6 +94,19 @@ export function useCloudSync(
     return '已登录 · 可云端同步'
   })
 
+  /**
+   * 本机保险库被销毁后重置「同步记账」状态。
+   * wipeAll 只清存储，不碰这些 ref；若不清，重建新库后 push 仍拿着旧 vault 的
+   * cloudRev 去做 CAS，会被误判成冲突或直接覆盖错误版本。
+   * 登录态本身保留（属于 Logto，不属于某个保险库）。
+   */
+  function resetLocal(): void {
+    cloudRev.value = 0
+    lastSyncedAt.value = null
+    remoteSummary.value = null
+    lastError.value = ''
+  }
+
   /** 刷新登录态与用户信息（视图挂载后可调用，或登录态变化时）。 */
   async function refresh(): Promise<void> {
     const s = await currentSub()
@@ -264,7 +277,7 @@ export function useCloudSync(
   return {
     configured, apiReady, authenticated, sub, user, busy, lastError,
     cloudRev, lastSyncedAt, remoteSummary, canSync, statusText,
-    refresh, login, logout, inspect, push, pull, restoreFromCloud,
+    refresh, login, logout, inspect, push, pull, restoreFromCloud, resetLocal,
   }
 }
 

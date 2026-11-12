@@ -14,7 +14,7 @@ passthrough/dev 模式下来自客户端声明的 X-User-Sub（**可伪造**，�
 
 生产建议：TOOLS_AUTH_MODE=logto + TOOLS_STORE=postgres 并配置相应环境变量。
 默认 passthrough（暂时不鉴权）+ memory，开箱即用、无外部依赖；
-passthrough 信任客户端声明的 X-User-Sub，正式多用户上线前必须切 logto（见 /api/auth/mode）。
+passthrough 信任客户端声明的 X-User-Sub，正式多用户上线前必须切 logto（见 /v1/auth/mode）。
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from . import config, runtime
 from .configs import router as configs_router
 from .schemas import APP_ERROR_CODES, HealthResponse, ServiceStatus, VersionResponse
 
-API_PREFIX = "/api"
+API_PREFIX = "/v1"
 
 
 @asynccontextmanager
@@ -129,7 +129,7 @@ def version() -> VersionResponse:
     )
 
 
-# 公共配置表 API（/api/auth/mode 与 /api/v1/configs/*）
+# 公共配置表 API（/v1/auth/mode 与 /v1/configs/*）
 app.include_router(configs_router)
 
 
@@ -149,13 +149,13 @@ if config.DIST_DIR.is_dir():
 
 @app.get("/{full_path:path}", include_in_schema=False)
 def spa_fallback(full_path: str):
-    """SPA 回退：非 /api 路径优先直出 dist 内真实文件，否则返回 index.html。
+    """SPA 回退：非 /v1 路径优先直出 dist 内真实文件，否则返回 index.html。
 
     前端是 hash 路由（/#/safekeep），hash 不发给服务器，故这里主要兜底根路径、
     /tools/ 前缀与 favicon 等静态文件。base 前缀（如 'tools/'）需先剥离，才能把
     /tools/favicon.ico 映射到 dist/favicon.ico；同时保留目录穿越防护。
     """
-    if full_path.startswith("api/") or full_path == "api":
+    if full_path.startswith("v1/") or full_path == "v1":
         return JSONResponse(
             status_code=404,
             content=_error_body(404, "NOT_FOUND", "接口不存在"),

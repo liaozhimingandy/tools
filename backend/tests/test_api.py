@@ -1,6 +1,6 @@
 """API 契约测试（unittest 标准库 + FastAPI TestClient）。
 
-覆盖：正常响应、响应 schema 稳定、SPA 回退、/api 未匹配返回 404 JSON、
+覆盖：正常响应、响应 schema 稳定、SPA 回退、/v1 未匹配返回 404 JSON、
 零知识标识恒为 true、规范版本统一记录、静态资源路径穿越被拒。
 测试不依赖真实网络、真实时钟或开发者本机路径。
 """
@@ -28,7 +28,7 @@ class TestMetaEndpoints(unittest.TestCase):
 
     def test_health_returns_stable_schema_when_dist_ready(self) -> None:
         with mock.patch.object(config, "dist_index_exists", return_value=True):
-            resp = self.client.get("/api/health")
+            resp = self.client.get("/v1/health")
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertEqual(set(body.keys()), {"status", "frontend_ready"})
@@ -39,13 +39,13 @@ class TestMetaEndpoints(unittest.TestCase):
 
     def test_health_degraded_flag_when_dist_missing(self) -> None:
         with mock.patch.object(config, "dist_index_exists", return_value=False):
-            resp = self.client.get("/api/health")
+            resp = self.client.get("/v1/health")
         self.assertEqual(resp.status_code, 200)
         self.assertIs(resp.json()["frontend_ready"], False)
 
     def test_version_returns_app_and_standards_version(self) -> None:
         with mock.patch.object(config, "read_standards_version", return_value="1.0.0"):
-            resp = self.client.get("/api/version")
+            resp = self.client.get("/v1/version")
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         # 版本随功能迭代更新：0.3.0 引入工具注册表 + schema_version/updated_by_device
@@ -57,12 +57,12 @@ class TestMetaEndpoints(unittest.TestCase):
 
     def test_version_zero_knowledge_flag_always_true(self) -> None:
         """后端从不接触明文/密钥/密文，该标识是安全契约，恒为 true。"""
-        resp = self.client.get("/api/version")
+        resp = self.client.get("/v1/version")
         self.assertIs(resp.json()["zero_knowledge"], True)
 
     def test_version_falls_back_when_standards_file_missing(self) -> None:
         with mock.patch.object(config, "read_standards_version", return_value="unknown"):
-            resp = self.client.get("/api/version")
+            resp = self.client.get("/v1/version")
         self.assertEqual(resp.json()["standards_version"], "unknown")
 
 
@@ -73,7 +73,7 @@ class TestRoutingContract(unittest.TestCase):
         self.client = TestClient(app, follow_redirects=False)
 
     def test_unknown_api_returns_404_json_not_html(self) -> None:
-        resp = self.client.get("/api/definitely-not-a-route")
+        resp = self.client.get("/v1/definitely-not-a-route")
         self.assertEqual(resp.status_code, 404)
         self.assertEqual(resp.json()["error"], "NOT_FOUND")
         self.assertNotIn("text/html", resp.headers.get("content-type", ""))
