@@ -82,3 +82,13 @@ export function consumeRestoreIntent(store: StorageAdapter, now: number = Date.n
 export function clearRestoreIntent(store: StorageAdapter): void {
   store.removeItem(KEY)
 }
+
+/**
+ * 回调落在站点根时，是否应把路由归位到锦囊解锁页。
+ *
+ * 纯函数，便于 node --test 覆盖。只认「没有 hash / 仍旧是门户」三种形态；
+ * 用户已经在 #/safekeep 或其它子页时不改路由，避免打断当前位置。
+ */
+export function shouldRestoreRoute(hash: string): boolean {
+  return !hash || hash === '/' || hash === '#/'
+}

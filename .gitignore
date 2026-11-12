@@ -34,4 +34,6 @@ build/
 backend/.deps/
 frontend/node_modules/.tmp/
 frontend/.playwright-cli/
+# playwright-cli 以仓库根为 cwd 运行时会落在根（快照/控制台日志）
+.playwright-cli/
 *.tsbuildinfo

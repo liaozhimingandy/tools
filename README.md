@@ -272,23 +272,25 @@ tools/
 > 真实数据库口令/IP **只写入 gitignore 的 `backend/.env`**，仓库内 `.env.example` 全是占位符；
 > 切勿把口令提交进仓库（本仓库会推到 GitHub）。
 
-1. **建库**（管理员 DSN 执行一次；已在云厂商控制台建好 `tools` 库）：
+1. **建库 + 建表**（`init-db` 容器会自动做，也可手动执行一次）：
    ```bash
-   PGPASSWORD='<admin-pass>' psql -h <host> -p 6432 -U <admin> -d tools -v ON_ERROR_STOP=1 -f sql/001_tool_configs.sql
-   PGPASSWORD='<admin-pass>' psql -h <host> -p 6432 -U <admin> -d tools -v ON_ERROR_STOP=1 -f sql/002_app_role.sql   # 记得 ALTER ROLE 改强密码
-   # 老库升级（幂等）：-f sql/003_migration.sql
+   PGPASSWORD='<pass>' psql -h <host> -p 6432 -U tools -d tools -v ON_ERROR_STOP=1 -f sql/001_tool_configs.sql
    ```
-   > ⚠️ 应用 DSN 必须用 `002_app_role.sql` 建的**非特权角色**：`postgres` 超级用户带 `BYPASSRLS`
-   > 会绕过全部行级安全策略（已由真实 PG 集成自检确认）。
+   > `001` 幂等，已含完整表结构 + 索引 + 种子 + `FORCE ROW LEVEL SECURITY`。
+   > ⚠️ 应用 DSN 必须是**非超级用户、不带 `BYPASSRLS`** 的角色（本部署 `tools` 账号即满足，
+   > RLS 已实测生效）；`postgres` 超级用户会绕过全部行级安全策略。
+   > `002_app_role.sql` / `003_migration.sql` 需要 `CREATEROLE` 并引用 `tools_app` 角色，
+   > 本云库账号无该权限，故**默认不执行**；仅「有管理员权限且确有 v0.2 旧库要升级」时手动跑。
 2. **填 `.env`**：`cp .env.example .env`，填 `TOOLS_PG_HOST` / `PORT` / `NAME` / `USER` / `PASSWORD`、
    `TOOLS_CORS_ORIGINS=https://<账号>.github.io`（若用自定义域则填该域，**只填 origin、不带路径**）、
    `TOOLS_PUBLIC_PATH`（容器若也托管 dist 才需，与前端一致）。
 3. **起容器**：
    ```bash
    docker compose up -d --build
-   docker compose logs -f init-db    # 核对迁移有无真实报错（脚本容忍重复执行/禁建角色的错误）
+   docker compose logs -f init-db    # 核对 001 建表有无报错
    ```
-   `init-db` 幂等执行 `001~003`，成功后 `api` 才启动；api 以非 root 运行、只读文件系统、`/tmp` 为 tmpfs。
+   `init-db` 幂等执行 `001_tool_configs.sql`（`ON_ERROR_STOP=1`），成功后 `api` 才启动；
+   api 以非 root 运行、只读文件系统、`/tmp` 为 tmpfs。
    国内云主机若拉不到 Docker Hub，构建时加：
    `docker compose build --build-arg PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.14-slim`
    （在 compose 的 `build.args.PYTHON_IMAGE` 配同值亦可，见 `Dockerfile` 顶部说明）。
@@ -299,10 +301,19 @@ tools/
 
 ## 部署 C：Logto 配置
 
-1. 在 Logto 控制台建 **Single Page App**，把站点根（无 `#`）加入 Redirect URI 与 Post-logout URI
-   白名单：`https://<账号>.github.io/tools/`（绑自定义域则用 `https://<域>/tools/`）。
-2. 把 endpoint / app id 填入 Actions Variables（`VITE_LOGTO_ENDPOINT` / `VITE_LOGTO_APP_ID`），
-   与前者一起重新 Run workflow。
+1. 在 Logto 控制台建 **Single Page App**，把**所有需要登录的部署地址**逐一加入 Redirect URI
+   与 Post-logout URI 白名单（**必须无 `#`**，Logto 对 redirect_uri 做精确匹配）：
+   - 线上：`https://<账号>.github.io/tools/`（绑自定义域则用 `https://<域>/tools/`）
+   - 本地联调：`http://localhost:5173/tools/`
+   - ⚠️ 实测：**`localhost` 与 `127.0.0.1` 是两个不同 origin**，`/` 与 `/tools/` 也是两个不同 URI。
+     只配 `http://localhost:5173/` 而页面落在 `/tools/`，会直接报
+     `oidc.invalid_redirect_uri`。本地联调务必用 `http://localhost:5173/tools/` 打开页面。
+   - ⚠️ 曾出现「为本地测试把线上 URI 从白名单删掉」导致线上登录失败的情况；
+     Logto 支持多 URI，**新增本地地址时不要删线上地址**。可在改完后用
+     `GET <endpoint>/oidc/auth?...&redirect_uri=<候选>` 探测：303 跳转登录页=已允许，400=未配置。
+2. endpoint / app id 已内联为公开默认值（非密钥），可用 Actions Variables
+   （`VITE_LOGTO_ENDPOINT` / `VITE_LOGTO_APP_ID`）覆盖；`VITE_LOGTO_REDIRECT_URI` 建议显式固定，
+   避免不同 host 打开时自动拼装出未登记的地址。
 3. 当前阶段前端 Logto 只用来拿 `sub` 作云端归属；后端仍是 `passthrough` 不验签。
    正式切后端验签时，另建 API resource 并把 issuer/audience/JWKS 三件套填入后端 `.env`，
    设 `TOOLS_AUTH_MODE=logto`（任一空即 fail-closed 拒绝全部请求）。
@@ -371,6 +382,56 @@ python -m app.main
 > ⚠️ **DSN 必须用非特权应用角色**：`postgres` 超级用户带 `BYPASSRLS`，会绕过全部 RLS 策略。
 > 这一点已由真实 PG 集成自检实测确认。密码含 `@` 时**不要**裸拼进 `TOOLS_DATABASE_URL`
 > （会被当成 host 分隔符），改用 `TOOLS_PG_PASSWORD` 分散变量由 `config.py` 编码。
+>
+> **云托管库实测补充**：若只拿到有 `CREATEDB`、无 `CREATEROLE` 的应用账号（本部署即如此），
+> **只跑 `001_tool_configs.sql` 即可**：它已含完整表结构 + `FORCE ROW LEVEL SECURITY`，
+> 用非超级用户、不带 `BYPASSRLS` 的账号直连时 RLS 已实测生效（两个不同 `app.user_sub`
+> 各只能看到自己的行）。`002_app_role.sql` 的 `CREATE ROLE`、`003_migration.sql` 末尾的
+> `GRANT ... TO tools_app` 在该权限下会失败，故 `docker-compose` 的 `init-db` 已改为只跑 001。
+> 只有「有管理员权限且确有 v0.2 旧库要升级」时才需手动执行 002/003。
+
+### 本地端到端联调（前端 dev + 真实云数据库）
+
+两个配置文件均**已被 `.gitignore` 忽略**，真实口令绝不入库：
+
+```powershell
+# frontend/.env.development.local（仅 `npm run dev` 的 development 模式加载）
+#   ⚠️ 必须用「带 mode 后缀」的文件名：Vite 的 .env.local 在 build 时也会加载，
+#      会把 localhost:8080 / localhost:5173 打进生产产物——线上会去请求用户本机
+#      并被 Mixed Content 拦截，登录回调也会跳回 localhost。已实测并修正。
+#   VITE_API_BASE_URL=http://localhost:8080
+#   VITE_LOGTO_REDIRECT_URI=http://localhost:5173/tools/
+#   VITE_LOGTO_POST_LOGOUT_REDIRECT_URI=http://localhost:5173/tools/
+#
+# backend/.env（FastAPI 只读 os.environ，需显式注入，没有 dotenv 自动加载）
+Get-Content backend/.env | ForEach-Object {
+  $l = $_.Trim()
+  if ($l -and -not $l.StartsWith('#') -and $l.Contains('=')) {
+    $i = $l.IndexOf('='); Set-Item "env:$($l.Substring(0,$i).Trim())" $l.Substring($i+1).Trim()
+  }
+}
+cd backend; $env:PYTHONPATH = (Resolve-Path ".deps").Path; python -m app.main
+# 另开终端：cd frontend; npm run dev
+# 浏览器务必用 http://localhost:5173/tools/ 打开（不是 127.0.0.1）
+```
+
+关键配置：`TOOLS_STORE=postgres`、`TOOLS_PG_*` 指向云库、`TOOLS_AUTH_MODE=passthrough`、
+`TOOLS_CORS_ORIGINS=http://localhost:5173`（**本地 5173 → 8080 是跨源，必须放行**）。
+
+已完成的实测（真实云数据库 + 真实浏览器）：
+
+| 环节 | 结果 |
+| --- | --- |
+| 建库 / `001` 迁移 / RLS 隔离 | 通过（alice 与 bob 互相不可见） |
+| 后端 API 端到端（17 项） | 全部通过：404→PUT 创建→GET 密文原样往返→409 CAS→更新→隔离→配额→413→软删除墓碑 |
+| 浏览器真实跨域 GET/PUT/DELETE | 通过（响应带 `Access-Control-Allow-Origin`） |
+| 欢迎页双通道 UI | 通过：本地创建 / 登录并从云端恢复 |
+| 登录跳转 + 恢复意图 | 通过：`signInSession.redirectUri` 正确、意图写入并带 10 分钟 TTL |
+| 回调落地路由归位 | 通过：`#/safekeep`，意图被消费；伪造 code 不会误触发覆盖 |
+
+> 调试经验：本机若设了 `HTTP_PROXY`，用 Python/httpx 测本地接口须 `trust_env=False`，
+> 否则请求被代理转发成绝对 URI，后端日志出现 `GET http%3A//...` 并全部 404。
+> 浏览器不受影响（WinINET 代理关闭 + `<local>` 绕过）。
 
 ## 测试与验证
 
@@ -396,28 +457,32 @@ python tests/pg_integration_check.py
 cd backend ; docker compose --env-file .env config
 ```
 
-**当前基线**：前端 `42/42` 单测、`vue-tsc` 类型检查、`vite build` 全绿；
-后端 `73/73` unittest 全绿；`docker compose config` 渲染通过（临时 `.env` 验证后已删除）。
+**当前基线**：前端 `53/53` 单测、`vue-tsc` 类型检查、`vite build` 全绿；
+后端 `73/73` unittest 全绿；`docker compose config` 渲染通过；
+**真实云数据库端到端 17/17 通过**（见「本地端到端联调」表格）。
 
-### 需在有外网/真实凭据的环境人工验证（本沙箱未完成）
+### 需在有外网/真实凭据的环境人工验证
 
-- [ ] **真实 PG 连接**：`backend/.env` 里的 PgBouncer 地址能否连上、`tools` 库权限、
-      `001~003` 迁移落库、`tools_app` 非特权角色 RLS 生效。本沙箱未连远程库。
-- [ ] **容器镜像构建**：`docker compose up -d --build`。本沙箱无法拉取 Docker Hub 镜像
+- [x] **真实 PG 连接 + 迁移 + RLS**：已连云库、建 `tools` 库、跑 `001`、
+      实测两个 `app.user_sub` 互相不可见。云账号无 `CREATEROLE`，故 `init-db` 已改为只跑 001。
+- [x] **GitHub Actions 部署**：推 `main` 后 Pages 产物 `/tools/` 已可访问、资源 200、hash 路由刷新不 404。
+      （首次部署需在 Settings > Pages 把 Source 选为 GitHub Actions，已实测为唯一阻塞点。）
+- [x] **本地登录跳转 + 回调归位**：Edge 实测点击「登录并从云端恢复」跳到 Logto 登录页、
+      `signInSession.redirectUri` 正确、恢复意图写入、伪造回调落地后归位 `#/safekeep` 且不误覆盖。
+- [ ] **容器镜像构建**：`docker compose up -d --build`。本环境无法拉取 Docker Hub 镜像
       （`python:3.14-slim`），已加 `ARG PYTHON_IMAGE` 支持国内镜像加速，需云主机实测。
 - [ ] **HTTPS 反代 + CORS**：域名证书、反代放通自定义头/OPTIONS 预检、Pages 源在
       `TOOLS_CORS_ORIGINS` 白名单内，浏览器无 Mixed Content / CORS 报错。
-- [x] **GitHub Actions 部署**：推 `main` 后 Pages 产物 `/tools/` 已可访问、资源 200、hash 路由刷新不 404。
-      （首次部署需在 Settings > Pages 把 Source 选为 GitHub Actions，已实测为唯一阻塞点。）
-- [ ] **Logto 后台回调白名单**（一次性，网页端）：在 Logto 控制台把
-      `https://<账号>.github.io/tools/` 加入 Redirect URIs + Post Logout Redirect URIs，
-      否则登录报 `redirect_uri` 未注册。endpoint/appId 已内联，无需在 Actions 配。
-- [ ] **Logto 真登录回环**：`/tools/` 回调 `code/state` 被 `main.ts` 消费、`sub` 正确落地，
-      登录/登出跳转正常；本沙箱无浏览器无法实测跳转。
+- [ ] **线上 Logto 回调白名单**（一次性，网页端）：⚠️ 实测当前白名单只剩
+      `http://localhost:5173/tools/`，**线上 `https://<账号>.github.io/tools/` 已被移除**，
+      线上登录会报 `oidc.invalid_redirect_uri`。请把线上地址加回 Redirect URIs 与
+      Post Logout Redirect URIs（保留本地地址，二者可共存）。
+- [ ] **真实 Logto 账号完成一次登录**：本环境无账号凭据，只验证到跳转与回调归位，
+      需本人用真实账号登录，确认 `sub` 落地、登出正常。
 - [ ] **填后端地址后端到端云同步**：先在 Settings > Variables 配 `VITE_API_BASE_URL` 重部署，
       再验「检查云端 → 上传 → 另一设备拉取 → 主密码重新解锁」密文不失真，
       冲突时 `stale`/强制覆盖提示符合预期。
-- [ ] **冷启动云端恢复全链路**：新设备/清浏览器后，解锁页点「登录并从云端恢复」→
+- [ ] **冷启动云端恢复全链路（真实登录）**：新设备/清浏览器后，解锁页点「登录并从云端恢复」→
       Logto 跳转 → 回调落站点根 → 自动回 `#/safekeep` 并拉一次密文 → 主密码解锁；
       验证普通刷新不会重复拉取/覆盖（恢复意图仅消费一次、TTL 10 分钟）。
 

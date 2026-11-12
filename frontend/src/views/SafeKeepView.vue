@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   LockOnIcon, SearchIcon, AddIcon, RefreshIcon, CloudIcon, SettingIcon, FileIcon,
-  SecuredIcon, KeyIcon, RollbackIcon, DownloadIcon,
+  SecuredIcon, KeyIcon, RollbackIcon, DownloadIcon, DeleteIcon, Edit1Icon,
 } from 'tdesign-icons-vue-next'
 import { useSafeKeep } from '@/composables/useSafeKeep.ts'
 import { TYPE_NAME } from '@/services/safekeep/vault.ts'

@@ -14,7 +14,7 @@ import {
 } from '../src/config.ts'
 import {
   markRestoreIntent, hasRestoreIntent, consumeRestoreIntent, clearRestoreIntent,
-  RESTORE_INTENT_TTL_MS,
+  shouldRestoreRoute, RESTORE_INTENT_TTL_MS,
 } from '../src/services/auth/restoreIntent.ts'
 import { memoryStorage } from '../src/services/safekeep/storage.ts'
 
@@ -114,4 +114,22 @@ test('恢复意图：clear 直接清除（登录失败 / 取消恢复时用）',
   markRestoreIntent(s, 1000)
   clearRestoreIntent(s)
   assert.equal(hasRestoreIntent(s, 1000), false)
+})
+
+// --------------------------------------------------------------------------- #
+// 回调落地后的路由归位判定
+// 回归：OAuth 回调落在站点根（无 fragment）时，必须把路由定位回锦囊；
+// 用户已经在锦囊或其它子页时不改路由，避免打断当前位置。
+// --------------------------------------------------------------------------- #
+
+test('shouldRestoreRoute：回调落在站点根 / 门户时需要归位', () => {
+  assert.equal(shouldRestoreRoute(''), true)
+  assert.equal(shouldRestoreRoute('/'), true)
+  assert.equal(shouldRestoreRoute('#/'), true)
+})
+
+test('shouldRestoreRoute：已在锦囊或其它子页时保持原位', () => {
+  assert.equal(shouldRestoreRoute('#/safekeep'), false)
+  assert.equal(shouldRestoreRoute('#/safekeep?tab=x'), false)
+  assert.equal(shouldRestoreRoute('#/404'), false)
 })
