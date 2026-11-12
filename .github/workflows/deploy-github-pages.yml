@@ -119,7 +119,14 @@ jobs:
 
       # 自定义域前面挂了 CDN 时，HTML 可能被长 TTL 缓存，导致「部署成功但公网仍是旧版」。
       # 在摘要里给一条带时间戳的 cache-buster 地址，便于部署后立即验证源站产物。
+      #
+      # ⚠️ 顶层 defaults.run.working-directory=frontend 会作用到**所有 job**，
+      # 而 deploy 作业没有 checkout，runner 上并不存在 frontend/ 目录。
+      # 任何 run: 步骤若不显式覆盖工作目录，会直接报
+      # "An error occurred trying to start process '/usr/bin/bash' ... No such file or directory"
+      # 且 0 秒失败（纯 uses: 步骤不受影响，这也是此前未暴露的原因）。
       - name: 公网验证地址（绕过 CDN 缓存）
+        working-directory: ${{ github.workspace }}
         run: |
           TS="$(date +%s)"
           {
