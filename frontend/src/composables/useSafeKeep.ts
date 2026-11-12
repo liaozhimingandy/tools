@@ -9,6 +9,10 @@ import { computed, onMounted, onUnmounted, reactive, ref, type Ref } from 'vue'
 import * as VC from '@/services/safekeep/crypto.ts'
 import * as vault from '@/services/safekeep/vault.ts'
 import { useCloudSync } from '@/composables/useCloudSync.ts'
+import { justSignedIn } from '@/services/auth/logto.ts'
+import {
+  consumeRestoreIntent, clearRestoreIntent, sessionRestoreStore,
+} from '@/services/auth/restoreIntent.ts'
 import {
   LS,
   browserStorage,
@@ -365,6 +369,34 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     if (e.key === LS.a && !vk.value) syncLockedHint()
   }
 
+  /**
+   * 云端恢复续做：仅当「本次刚从 Logto 回调落地」+「存在未过期恢复意图」+
+   * 「确实已登录」三者同时成立，才自动拉取一次。普通刷新/首次打开绝不触发，
+   * 避免静默用云端密文覆盖本机。意图在这里被消费（清除），不会重复执行。
+   */
+  function resumeCloudRestore(): void {
+    // 先判 justSignedIn 再消费意图：普通刷新直接跳过，且无论如何都清掉陈旧意图
+    if (!justSignedIn()) {
+      clearRestoreIntent(sessionRestoreStore())
+      return
+    }
+    if (!consumeRestoreIntent(sessionRestoreStore())) return
+    if (!cloud.authenticated.value) {
+      toast('登录未完成，请重新点「从云端恢复」')
+      return
+    }
+    void cloud.restoreFromCloud(true).then((r) => {
+      // onApplied 已在拉取成功后 lock + 提示重新解锁，这里只兜底失败分支
+      if (r.kind === 'error' || r.kind === 'need-api' || r.kind === 'empty') toast(r.message)
+    })
+  }
+
+  /** 解锁页入口：把 outcome 统一转成用户提示（成功由 onApplied 接管）。 */
+  async function restoreFromCloud(): Promise<void> {
+    const r = await cloud.restoreFromCloud(true)
+    if (r.kind !== 'applied') toast(r.message)
+  }
+
   onMounted(() => {
     const p = getPrefs(store)
     prefs.idleMs = typeof p.idleMs === 'number' ? p.idleMs : 300000
@@ -377,6 +409,8 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     document.addEventListener('pointerdown', onPointer)
     document.addEventListener('keydown', onPointer)
     window.addEventListener('storage', onStorage)
+    // 登录后回到锦囊：自动续做一次云端拉取（有严格三重判定，见上）
+    resumeCloudRestore()
   })
   onUnmounted(() => {
     stopLockTimer()
@@ -397,7 +431,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     // 云端同步
     cloud,
     // 方法
-    toast, create, confirmRecovery, unlock, lock, copyWithClear,
+    toast, create, confirmRecovery, unlock, lock, copyWithClear, restoreFromCloud,
     save, remove, restore, toggleFav, newEntry, editEntry,
     exportBackupText, importBackupText, changePassword, makeNewRecovery, commitNewRecovery,
     savePrefs, wipe, storageRaw, isForcedChangePw,

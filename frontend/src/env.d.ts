@@ -8,6 +8,7 @@ declare module '*.vue' {
 
 /** 构建期环境变量（vite build 时内联；见 src/config.ts）。 */
 interface ImportMetaEnv {
+  readonly BASE_URL?: string
   readonly VITE_API_BASE_URL?: string
   readonly VITE_LOGTO_ENDPOINT?: string
   readonly VITE_LOGTO_APP_ID?: string

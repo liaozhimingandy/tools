@@ -4,17 +4,29 @@
  * 所有部署差异（API 地址、Logto 租户、公网 base）都在这里集中读取并做校验，
  * 业务代码不要直接散读 import.meta.env，便于统一处理「未配置 = 降级」。
  *
- * 关键契约：
- *  - VITE_API_BASE_URL 为空 => 云端同步不可用，锦囊保持纯本地（绝不白屏）；
- *  - VITE_LOGTO_* 未配齐 => Logto 登录不可用，同样降级为纯本地；
- *  - 两者都配齐才启用「登录后云端同步」完整链路。
+ * 关键契约（本轮起把「能否登录」与「能否云端同步」解耦）：
+ *  - logtoEnabled()    = endpoint + appId + redirectUri 齐全 => 可以走 Logto 登录；
+ *  - apiConfigured()   = 有 VITE_API_BASE_URL               => 后端云端地址就绪；
+ *  - cloudEnabled()    = 两者都齐                            => 完整云端同步可用。
+ *  这样即使后端地址还没填，用户也能先登录、看到账号态；点云端恢复时得到
+ *  「后端地址未配置」的可操作提示，而不是被一个总开关整体隐藏。
+ *
+ * Logto 配置内联默认值说明：
+ *  - endpoint / appId 是 OAuth2 的**公开客户端标识**（Public Client），设计上本就
+ *    暴露在浏览器里（官方集成示例也是明文写在前端），不是密钥，故内联为默认值，
+ *    让部署开箱可登录；若要换租户，仍可用 VITE_LOGTO_* 覆盖，无需改代码。
+ *  - appSecret 一律不进前端（本应用是 PKCE 公共客户端，无 secret）。
  *
  * Node 安全：import.meta.env 在 Node 单测里不存在，统一经 ENV 守卫读取，
- * 使 client/sync 等纯逻辑可在 node --test 下直接 import。
+ * 使 client/sync/config 等纯逻辑可在 node --test 下直接 import。
  */
 
 /** 构建期环境变量快照；Node 下为空对象（用 as 断言补齐 Vite 注入的内置键）。 */
 const ENV = ((import.meta as unknown as { env?: ImportMetaEnv }).env ?? {}) as ImportMetaEnv
+
+/** Logto 公开客户端配置默认值（可被 VITE_LOGTO_* 覆盖）。非密钥。 */
+export const DEFAULT_LOGTO_ENDPOINT = 'https://account.alsoapp.com'
+export const DEFAULT_LOGTO_APP_ID = '0z2t6jrnf4z9lzy4miusg'
 
 /** 运行时公网基路径（Vite 已注入；hash 路由下 hash 前的前缀，如 /tools/）。 */
 export const PUBLIC_BASE: string = ENV.BASE_URL || '/'
@@ -26,7 +38,7 @@ export interface CloudConfig {
 
 export interface LogtoConfig {
   enabled: boolean
-  /** Logto endpoint，如 https://tenant.logto.app */
+  /** Logto endpoint，如 https://tenant.logto.app（无尾斜杠） */
   endpoint: string
   appId: string
   /** 需要访问的 API resource（可选；用于拿 access token 的 audience） */
@@ -47,35 +59,44 @@ function apiBase(): string {
   return trim(ENV.VITE_API_BASE_URL).replace(/\/+$/, '')
 }
 
+/** 后端云端地址是否已配置（与 Logto 登录解耦）。 */
+export function apiConfigured(): boolean {
+  return !!apiBase()
+}
+
 export function cloudConfig(): CloudConfig {
   return { apiBase: apiBase() }
 }
 
+/** 是否具备「走 Logto 登录」的全部条件（不要求后端 API 已配）。 */
+export function logtoEnabled(): boolean {
+  return logtoConfig().enabled
+}
+
 /** 是否具备启用云端同步的全部条件（API 地址 + Logto 三件套）。 */
 export function cloudEnabled(): boolean {
-  return !!apiBase() && logtoConfig().enabled
+  return apiConfigured() && logtoEnabled()
 }
 
 /**
- * 回调地址拼装：部署在 GitHub Pages 子路径时，redirect_uri 落到站点根 index.html，
- * Logto 携带 ?code=&state= 回来；hash 路由保证不带 #，符合 OAuth 规范。
+ * 纯解析函数（可注入 env / origin，便于 Node 单测，不依赖 import.meta 与 window）。
+ * 生产走下方的 logtoConfig()；测试直接喂 deps 覆盖默认值与回调拼装。
  */
-function buildRedirectUri(raw: string): string {
-  const value = trim(raw)
-  if (value) return value
-  if (typeof window === 'undefined') return ''
-  const base = new URL(PUBLIC_BASE, window.location.origin).toString()
-  return base.replace(/\/?$/, '/')
-}
-
-export function logtoConfig(): LogtoConfig {
-  const endpoint = trim(ENV.VITE_LOGTO_ENDPOINT).replace(/\/+$/, '')
-  const appId = trim(ENV.VITE_LOGTO_APP_ID)
-  const redirectUri = buildRedirectUri(trim(ENV.VITE_LOGTO_REDIRECT_URI))
-  const postLogoutRedirectUri =
-    trim(ENV.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI) || redirectUri
-  const resource = trim(ENV.VITE_LOGTO_RESOURCE)
-  const rawScopes = trim(ENV.VITE_LOGTO_SCOPES)
+export function resolveLogtoConfig(
+  env: Partial<ImportMetaEnv> = {},
+  origin: string = '',
+): LogtoConfig {
+  const endpoint = (trim(env.VITE_LOGTO_ENDPOINT) || DEFAULT_LOGTO_ENDPOINT).replace(/\/+$/, '')
+  const appId = trim(env.VITE_LOGTO_APP_ID) || DEFAULT_LOGTO_APP_ID
+  const rawRedirect = trim(env.VITE_LOGTO_REDIRECT_URI)
+  let redirectUri = rawRedirect
+  if (!redirectUri && origin) {
+    const publicBase = trim(env.BASE_URL) || '/'
+    redirectUri = new URL(publicBase, origin).toString().replace(/\/?$/, '/')
+  }
+  const postLogoutRedirectUri = trim(env.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI) || redirectUri
+  const resource = trim(env.VITE_LOGTO_RESOURCE)
+  const rawScopes = trim(env.VITE_LOGTO_SCOPES)
   const scopes = rawScopes
     ? rawScopes.split(',').map((s) => s.trim()).filter(Boolean)
     : []
@@ -88,4 +109,11 @@ export function logtoConfig(): LogtoConfig {
     postLogoutRedirectUri,
     scopes,
   }
+}
+
+export function logtoConfig(): LogtoConfig {
+  const origin = typeof window === 'undefined'
+    ? ''
+    : window.location.origin
+  return resolveLogtoConfig(ENV, origin)
 }

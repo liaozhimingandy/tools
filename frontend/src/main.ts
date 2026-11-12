@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import { initAuth } from '@/services/auth/logto.ts'
+import { hasRestoreIntent, sessionRestoreStore } from '@/services/auth/restoreIntent.ts'
 
 // TDesign Vue Next：全量注册 + 全局基础样式（组件外观为未分层 CSS，不受 Tailwind preflight 影响）
 import TDesign from 'tdesign-vue-next'
@@ -22,6 +23,15 @@ async function boot(): Promise<void> {
     await initAuth()
   } catch {
     /* 任何意外都降级：不阻断挂载，保证绝不白屏 */
+  }
+  // 「从云端恢复」登录回跳：OAuth 回调必落在站点根（无 fragment），
+  // 若存在未消费的恢复意图，把 hash 定位回锦囊，让 useSafeKeep 挂载后续做拉取。
+  // 意图的消费与过期由 useSafeKeep.onMounted 负责，这里只做路由归位，绝不重复拉取。
+  if (hasRestoreIntent(sessionRestoreStore()) && typeof window !== 'undefined') {
+    const url = new URL(window.location.href)
+    if (!url.hash || url.hash === '/' || url.hash === '#/') {
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + '#/safekeep')
+    }
   }
   createApp(App).use(router).use(TDesign).mount('#app')
 }

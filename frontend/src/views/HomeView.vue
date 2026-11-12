@@ -4,7 +4,7 @@ import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { LockOnIcon, ChevronRightIcon, CloudIcon, LogoutIcon } from 'tdesign-icons-vue-next'
 import { cachedAuthState, currentSub, displayUser, signIn, signOut, type DisplayUser } from '@/services/auth/logto.ts'
-import { cloudEnabled } from '@/config.ts'
+import { logtoEnabled } from '@/config.ts'
 
 interface ToolCard {
   to: string
@@ -24,7 +24,8 @@ const tools: ToolCard[] = [
   },
 ]
 
-const enabled = cloudEnabled()
+// 登录入口只看 Logto 是否可用；后端 API 未配时仍可先登录、看到账号态。
+const enabled = logtoEnabled()
 const sub = ref<string | null>(cachedAuthState()?.sub ?? null)
 const user = ref<DisplayUser | null>(null)
 onMounted(async () => {
@@ -45,7 +46,7 @@ async function logout(): Promise<void> {
   <header class="topbar">
     <div class="brand">tools · <span class="text-brand">工具集</span></div>
     <div class="sp"></div>
-    <!-- 云端同步已配置时显示登录入口；未配置时纯本地，不打扰 -->
+    <!-- Logto 可用时显示登录入口；未配置时纯本地，不打扰 -->
     <template v-if="enabled">
       <t-tag v-if="sub" size="small" variant="light" theme="success">已登录</t-tag>
       <span v-if="sub" class="cd">{{ user?.name || user?.email || sub }}</span>

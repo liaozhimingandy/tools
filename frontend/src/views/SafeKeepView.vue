@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   LockOnIcon, SearchIcon, AddIcon, RefreshIcon, CloudIcon, SettingIcon, FileIcon,
-  SecuredIcon, KeyIcon, RollbackIcon,
+  SecuredIcon, KeyIcon, RollbackIcon, DownloadIcon,
 } from 'tdesign-icons-vue-next'
 import { useSafeKeep } from '@/composables/useSafeKeep.ts'
 import { TYPE_NAME } from '@/services/safekeep/vault.ts'
@@ -39,6 +39,16 @@ function fmtTime(ts: number | null | undefined): string {
 function doUnlock(recovery: boolean): void {
   void sk.unlock(recovery ? recoverCode.value : recoverPw.value, recovery)
   if (!recovery) recoverPw.value = ''
+}
+/** 本机已有库时，云端覆盖会丢未同步条目，需二次确认 */
+const confirmCloudRestore = ref(false)
+async function onCloudRestore(forceOverride: boolean): Promise<void> {
+  if (!forceOverride && sk.account.value) {
+    confirmCloudRestore.value = true // 先展示确认条，用户再点一次
+    return
+  }
+  confirmCloudRestore.value = false
+  await sk.restoreFromCloud()
 }
 function download(name: string, text: string): void {
   const blob = new Blob([text], { type: 'application/json' })
@@ -109,7 +119,7 @@ watch(() => sk.screen.value, (s) => {
     <!-- 顶栏 -->
     <header class="topbar">
       <div class="brand"><RouterLink to="/">tools</RouterLink> · 锦<span class="text-brand">囊</span></div>
-      <t-tag size="small" variant="light" :theme="sk.cloud.canSync.value ? 'success' : 'default'">
+      <t-tag v-if="sk.cloud.configured.value" size="small" variant="light" :theme="sk.cloud.canSync.value ? 'success' : 'default'">
         {{ sk.cloud.statusText.value }}
       </t-tag>
       <div class="sp"></div>
@@ -137,7 +147,24 @@ watch(() => sk.screen.value, (s) => {
           <t-button theme="primary" class="flex-1" @click="sk.create(newPw, newPw2)">创建保险库</t-button>
           <t-button theme="default" variant="outline" class="flex-1" @click="sk.dialog.value = 'backup'">从备份恢复</t-button>
         </div>
-        <p class="hint">本版本为本地 MVP：数据只保存在当前浏览器。清理浏览器数据、换设备或换浏览器都会丢失，请定期用「备份与恢复」导出加密备份文件。</p>
+        <p class="hint">本版本数据默认只保存在当前浏览器。清理浏览器数据、换设备或换浏览器都会丢失，请定期导出加密备份或开启云端同步。</p>
+
+        <!-- 云端恢复：换设备 / 浏览器数据被清后，登录下载密文重建本地库 -->
+        <template v-if="sk.cloud.configured.value">
+          <t-divider class="my-5">或从云端恢复</t-divider>
+          <div class="cloud-restore">
+            <div class="cloud-restore-head"><DownloadIcon /> <b>在另一台设备上继续</b></div>
+            <p class="cloud-restore-desc">登录账号，把云端保存的<b>密文</b>下载到本机，再用你的主密码解锁。云端与主密码始终分离，服务器看不到明文，也解不开你的数据。</p>
+            <t-button
+              theme="primary" variant="outline" block
+              :loading="sk.cloud.busy.value"
+              @click="onCloudRestore(false)"
+            >
+              <CloudIcon class="mr-1" /> {{ sk.cloud.authenticated.value ? '从云端下载并恢复' : '登录并从云端恢复' }}
+            </t-button>
+            <p class="hint !mt-2">若云端还没有数据，可先在原设备「账号与云端同步」里上传一次；或直接用上方「从备份恢复」导入加密备份文件。</p>
+          </div>
+        </template>
       </section>
 
       <!-- 恢复码确认 -->
@@ -183,6 +210,21 @@ watch(() => sk.screen.value, (s) => {
         <p class="hint">连续输错会增加等待时间。本地模式没有服务端限流，真正抵御离线爆破靠的是主密码强度与 PBKDF2 600k 迭代。</p>
         <t-divider class="my-4" />
         <t-button variant="text" block @click="sk.dialog.value = 'backup'">从加密备份文件恢复</t-button>
+
+        <!-- 云端恢复：登录下载云端密文覆盖本机（换设备 / 本地损坏） -->
+        <template v-if="sk.cloud.configured.value">
+          <t-divider class="my-4">或</t-divider>
+          <t-alert v-if="confirmCloudRestore" theme="warning" class="my-3">
+            <template #message>从云端恢复会<b>用云端密文覆盖这台设备的全部条目</b>，本机尚未同步的改动会丢失。建议先导出一份本地备份。确认继续？</template>
+            <template #action>
+              <t-button size="small" theme="warning" :loading="sk.cloud.busy.value" @click="onCloudRestore(true)">确认覆盖并下载</t-button>
+              <t-button size="small" variant="text" @click="confirmCloudRestore = false">取消</t-button>
+            </template>
+          </t-alert>
+          <t-button v-else variant="outline" theme="primary" block :loading="sk.cloud.busy.value" @click="onCloudRestore(false)">
+            <DownloadIcon class="mr-1" /> {{ sk.cloud.authenticated.value ? '从云端下载并恢复' : '登录并从云端恢复' }}
+          </t-button>
+        </template>
       </section>
 
       <!-- 主界面 -->
@@ -299,6 +341,10 @@ watch(() => sk.screen.value, (s) => {
 .strength i { display: block; height: 100%; width: 0; transition: width 0.2s; }
 /* 恢复码输入：TDesign 的 inputClass 实测未作用到 inner input，改用 :deep 兜底等宽字体 */
 .code-input :deep(.t-input__inner) { font-family: var(--font-mono); letter-spacing: 0.04em; }
+.cloud-restore { background: var(--color-brand-softer); border: 1px solid var(--color-line); border-radius: 10px; padding: 14px; }
+.cloud-restore-head { display: flex; align-items: center; gap: 7px; color: var(--color-brand); font-size: 13.5px; margin-bottom: 7px; }
+.cloud-restore-desc { color: var(--color-ink-2); font-size: 12.5px; line-height: 1.65; margin: 0 0 12px; }
+.cloud-restore-desc b { color: var(--color-ink); }
 
 .vault-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; }
 @media (max-width: 760px) { .vault-layout { grid-template-columns: 1fr; } .side { display: flex; flex-wrap: wrap; gap: 6px; position: static; } .side :deep(.t-divider), .side .side-title { display: none; } .side button { padding: 5px 9px; font-size: 12px; width: auto; } }

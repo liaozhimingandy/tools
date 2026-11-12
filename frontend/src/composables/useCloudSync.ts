@@ -19,11 +19,14 @@ import {
 } from '@/services/cloud/sync.ts'
 import { fetchVault, fetchRevision, putVault, CloudError } from '@/services/cloud/client.ts'
 import type { RemoteSummary } from '@/services/cloud/types.ts'
-import { cloudEnabled as cloudEnabledFn } from '@/config.ts'
+import { apiConfigured as apiConfiguredFn } from '@/config.ts'
 import {
   isConfigured, currentSub, currentAccessToken, displayUser,
-  cachedAuthState, type DisplayUser,
+  cachedAuthState, signIn, type DisplayUser,
 } from '@/services/auth/logto.ts'
+import {
+  markRestoreIntent, sessionRestoreStore,
+} from '@/services/auth/restoreIntent.ts'
 import type { Account } from '@/services/safekeep/types.ts'
 
 // 设备标识：同一浏览器稳定，用于多端排障（明文元数据，非用户密钥）
@@ -49,6 +52,15 @@ export interface PullOutcome {
   message: string
   /** 已覆盖本地并需要重新解锁 */
   needUnlock?: boolean
+  /** 云端空（404）：解锁页据此提示「先在本地创建或上传」 */
+  empty?: boolean
+}
+
+/** 解锁页「从云端恢复」的编排结果，供 UI 分支处理。 */
+export type RestoreKind = 'redirect' | 'need-api' | 'applied' | 'empty' | 'error'
+export interface RestoreOutcome {
+  kind: RestoreKind
+  message: string
 }
 
 export function useCloudSync(
@@ -59,8 +71,11 @@ export function useCloudSync(
   },
 ) {
   // 同步读取 main.ts 挂载前 initAuth() 的结果，保证首屏即为正确登录态，不闪屏。
+  // configured 只看 Logto：能登录即为 true；后端 API 是否就绪由 apiReady 单独表示，
+  // 两者解耦后，未填后端地址时用户仍可先登录、看到账号态，恢复时得到可操作提示。
   const cached = cachedAuthState()
-  const configured = ref(cached ? cached.configured && cloudEnabledFn() : isConfigured() && cloudEnabledFn())
+  const configured = ref(isConfigured())
+  const apiReady = ref(apiConfiguredFn())
   const authenticated = ref(cached?.authenticated ?? false)
   const sub: Ref<string | null> = ref(cached?.sub ?? null)
   const user: Ref<DisplayUser | null> = ref(null)
@@ -70,10 +85,12 @@ export function useCloudSync(
   const lastSyncedAt = ref(getCloudSyncAt(store))
   const remoteSummary: Ref<RemoteSummary | null> = ref(null)
 
-  const canSync = computed(() => configured.value && authenticated.value && !!sub.value)
+  /** 完整同步能力：需 Logto 已配 + 后端 API 已配 + 已登录且有 sub。 */
+  const canSync = computed(() => configured.value && apiReady.value && authenticated.value && !!sub.value)
   const statusText = computed(() => {
-    if (!configured.value) return '仅本地 · 云端未配置'
-    if (!authenticated.value) return '仅本地 · 未登录'
+    if (!configured.value) return '仅本地 · 登录未配置'
+    if (!authenticated.value) return '本地 · 可登录同步'
+    if (!apiReady.value) return '已登录 · 云端地址未配置'
     return '已登录 · 可云端同步'
   })
 
@@ -82,19 +99,48 @@ export function useCloudSync(
     const s = await currentSub()
     sub.value = s
     authenticated.value = !!s
-    configured.value = isConfigured() && cloudEnabledFn()
+    configured.value = isConfigured()
+    apiReady.value = apiConfiguredFn()
     user.value = s ? await displayUser() : null
   }
   // 首屏若已登录，异步补齐展示信息（昵称/邮箱）
   if (authenticated.value) void refresh()
 
   async function login(): Promise<void> {
-    const { signIn } = await import('@/services/auth/logto.ts')
     await signIn() // 会跳转离开页面
   }
   async function logout(): Promise<void> {
     const { signOut } = await import('@/services/auth/logto.ts')
     await signOut() // 会跳转离开页面
+  }
+
+  /**
+   * 解锁页「从云端恢复」：确保登录（未登录则标记意图并跳转），
+   * 已登录且后端就绪则强制拉取覆盖（解锁页场景用户已主动点恢复，
+   * 覆盖确认由 UI 在调用前完成）。回调落地后由 onMounted 续做真正的拉取。
+   */
+  async function restoreFromCloud(force = true): Promise<RestoreOutcome> {
+    // 1) 未登录：标记「云端恢复」意图，避免回调后不知道要续做什么
+    if (!authenticated.value || !sub.value) {
+      markRestoreIntent(sessionRestoreStore())
+      try {
+        await login() // 跳转 Logto（可能不抛错但页面会卸载）
+        return { kind: 'redirect', message: '正在跳转登录，回来后将自动从云端下载密文' }
+      } catch (e) {
+        return { kind: 'error', message: '登录跳转失败：' + (e as Error).message }
+      }
+    }
+    // 2) 已登录但后端云端地址未配：给可操作提示，不静默失败
+    if (!apiReady.value) {
+      return {
+        kind: 'need-api',
+        message: '已登录，但后端云端地址尚未配置：请在仓库 Settings → Variables 添加 VITE_API_BASE_URL 并重新部署前端。',
+      }
+    }
+    // 3) 已登录 + 后端就绪：拉取密文覆盖本机（onApplied 会锁定并提示重新解锁）
+    const r = await pull(force)
+    if (!r.ok) return { kind: r.empty ? 'empty' : 'error', message: r.message }
+    return { kind: 'applied', message: r.message }
   }
 
   function requireOpts() {
@@ -184,7 +230,7 @@ export function useCloudSync(
     lastError.value = ''
     try {
       const remote = await fetchVault(opts)
-      if (!remote) return { ok: false, message: '云端还没有同步数据' }
+      if (!remote) return { ok: false, message: '云端还没有同步数据', empty: true }
       const localRev = curRev(store)
       const decision = decidePull(remote.blob.rev, localRev)
       if (decision.kind === 'up-to-date' && !force) {
@@ -216,9 +262,9 @@ export function useCloudSync(
   }
 
   return {
-    configured, authenticated, sub, user, busy, lastError,
+    configured, apiReady, authenticated, sub, user, busy, lastError,
     cloudRev, lastSyncedAt, remoteSummary, canSync, statusText,
-    refresh, login, logout, inspect, push, pull,
+    refresh, login, logout, inspect, push, pull, restoreFromCloud,
   }
 }
 

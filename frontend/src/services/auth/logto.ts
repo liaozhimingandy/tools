@@ -15,6 +15,13 @@ import { logtoConfig, type LogtoConfig } from '@/config.ts'
 let client: LogtoClient | null = null
 /** main.ts 在挂载前 initAuth() 的结果缓存，供各视图同步读取初始登录态。 */
 let lastAuthState: AuthState | null = null
+/** 本次页面加载是否刚消费过 OAuth 回调（code/state）。供恢复意图续做判定，防刷新重复拉取。 */
+let consumedCallbackOnBoot = false
+
+/** 本次启动是否刚从 Logto 回调落地（而非普通刷新/首次打开）。 */
+export function justSignedIn(): boolean {
+  return consumedCallbackOnBoot
+}
 
 function cfg(): LogtoConfig {
   return logtoConfig()
@@ -85,6 +92,7 @@ export async function initAuth(): Promise<AuthState> {
     if (hasCallbackParams()) {
       await c.handleSignInCallback(window.location.href)
       stripCallbackParams()
+      consumedCallbackOnBoot = true
     }
     const authed = await c.isAuthenticated()
     const sub = authed ? (await c.getIdTokenClaims()).sub : null

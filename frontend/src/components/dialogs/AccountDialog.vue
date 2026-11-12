@@ -2,10 +2,12 @@
 /**
  * 账号中心与云端同步（零知识）。
  *
- * 三种状态：
- *  1) 未配置（缺 VITE_API_BASE_URL / VITE_LOGTO_*）：说明如何开启，保持纯本地；
- *  2) 已配置未登录：Logto 登录按钮，登录后才能同步；
- *  3) 已登录：查看云端摘要、从云端拉取 / 上传到云端 / 强制覆盖，均二次确认。
+ * 三种状态（Logto 登录能力与后端 API 已解耦）：
+ *  1) Logto 未配置：说明如何开启，保持纯本地（内联默认值后一般不触发）；
+ *  2) 已配 Logto 未登录：登录按钮；若后端 VITE_API_BASE_URL 未配会额外提示，
+ *     但仍允许先登录，避免用总开关把登录入口整个藏掉；
+ *  3) 已登录：若后端未配则显示可操作提示、隐藏同步操作；否则查看摘要、
+ *     拉取 / 上传 / 强制覆盖，均二次确认。退出登录始终可用。
  * 上传的是 {account, items, rev} 密文密封结构，主密码/恢复码/vaultKey 永不上云。
  */
 import { ref } from 'vue'
@@ -86,35 +88,32 @@ async function onPush(force = false): Promise<void> {
     :footer="false"
     @close="emit('close')"
   >
-    <!-- 状态 1：未配置 -->
+    <!-- 状态 1：Logto 未配置（内联默认值后一般不会触发，仅自定义构建可能） -->
     <template v-if="!cloud.configured.value">
       <p class="dlg-desc">当前是 <b>纯本地模式</b>：数据只保存在这台设备，不上传任何服务器。</p>
       <t-alert theme="info">
-        <template #message>要启用「登录后云端同步」，需在构建前端时配置环境变量（不影响本地功能）。</template>
+        <template #message>登录未启用。前端需配置 Logto endpoint / appId 才能登录并同步。</template>
       </t-alert>
-      <ul class="plan-list mono text-[12px]">
-        <li>VITE_API_BASE_URL=https://你的后端域名</li>
-        <li>VITE_LOGTO_ENDPOINT / VITE_LOGTO_APP_ID</li>
-        <li>VITE_LOGTO_RESOURCE（API resource，可选）</li>
-        <li>VITE_LOGTO_REDIRECT_URI=https://…/tools/ （无 #，且需在 Logto 控制台加白名单）</li>
-      </ul>
-      <p class="hint">缺任一配置都会自动保持纯本地，绝不影响离线使用。配置说明见项目 README。</p>
+      <p class="hint">当前构建已内置 Logto 公共客户端配置；若你看到此提示，请检查构建产物或改用官方工作流重新部署。</p>
       <div class="flex mt-5">
         <t-button theme="primary" variant="outline" block @click="close">知道了</t-button>
       </div>
     </template>
 
-    <!-- 状态 2：已配置未登录 -->
+    <!-- 状态 2：已配置 Logto 但未登录 -->
     <template v-else-if="!cloud.authenticated.value">
-      <p class="dlg-desc">云端同步已就绪，登录后即可把密文同步到你的账号。</p>
-      <div class="kv"><span>云端</span><span class="mono">{{ cloud.statusText.value }}</span></div>
+      <p class="dlg-desc">登录后即可把密文同步到你的账号，或在换设备时从云端恢复。</p>
+      <div class="kv"><span>状态</span><span class="mono">{{ cloud.statusText.value }}</span></div>
       <div class="kv"><span>上次同步</span><span>{{ fmtTime(cloud.lastSyncedAt.value) }}</span></div>
+      <t-alert v-if="!cloud.apiReady.value" theme="warning" class="my-4">
+        <template #message>后端云端地址尚未配置：请到仓库 <b>Settings → Variables</b> 添加 <code>VITE_API_BASE_URL</code>（后端 HTTPS 域名）并重新部署。此时可先登录，但上传/下载会提示未就绪。</template>
+      </t-alert>
       <t-alert theme="warning" class="my-4">
         <template #message>当前后端为<b>暂时不鉴权</b>阶段：身份由浏览器声明、服务端不校验签名。密文无法被他人解密，但可能被覆盖/删除。请同时保留本地加密备份。</template>
       </t-alert>
       <div class="flex gap-2 mt-5">
         <t-button theme="primary" class="flex-1" :loading="cloud.busy.value" @click="onLogin">
-          <CloudIcon class="mr-1" /> 登录并启用同步
+          <CloudIcon class="mr-1" /> 登录
         </t-button>
         <t-button theme="default" variant="outline" class="flex-1" @click="close">暂不登录</t-button>
       </div>
@@ -128,6 +127,11 @@ async function onPush(force = false): Promise<void> {
       <div class="kv"><span>本地逻辑版本</span><span class="mono">{{ cloud.cloudRev.value }}</span></div>
       <div class="kv"><span>上次同步</span><span>{{ fmtTime(cloud.lastSyncedAt.value) }}</span></div>
 
+      <t-alert v-if="!cloud.apiReady.value" theme="warning" class="my-4">
+        <template #message>已登录，但<b>后端云端地址尚未配置</b>，暂不能上传/下载。请到仓库 <b>Settings → Variables</b> 添加 <code>VITE_API_BASE_URL</code> 并重新部署前端；配置后回到这里点「检查云端」即可。</template>
+      </t-alert>
+
+      <template v-if="cloud.apiReady.value">
       <div v-if="cloud.remoteSummary.value?.exists" class="cipher-box mt-3">
         <div class="kv"><span>云端条目</span><span>{{ cloud.remoteSummary.value.itemCount }} 条密文</span></div>
         <div class="kv"><span>云端逻辑版本</span><span class="mono">{{ cloud.remoteSummary.value.blobRev }}</span></div>
@@ -166,6 +170,7 @@ async function onPush(force = false): Promise<void> {
           <template #icon><UploadIcon /></template>上传到云端
         </t-button>
       </div>
+      </template>
 
       <t-divider class="my-4" />
       <div class="flex items-center gap-2">

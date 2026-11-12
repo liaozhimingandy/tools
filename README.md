@@ -124,10 +124,15 @@ tools/
 
 ### 云端同步（前端交互契约）
 
-- **软门禁**：只有 `VITE_API_BASE_URL` 和 `VITE_LOGTO_*` 配齐、且用户已登录 Logto，
-  才允许云端同步；否则界面显示「仅本地」，加解密照常离线可用，绝不白屏。
+- **登录与同步解耦**（本轮起）：`logtoEnabled()`（能否登录）与 `apiConfigured()`（后端地址是否就绪）
+  是两个独立开关。Logto endpoint/appId 已内联为公开默认值（可 `VITE_LOGTO_*` 覆盖），
+  所以**部署即可登录**；后端 `VITE_API_BASE_URL` 未配时，仍可登录、看到账号态，只在真正上传/下载时
+  给出「请到 Settings → Variables 添加 VITE_API_BASE_URL」的可操作提示，绝不用一个总开关把登录入口藏掉。
+  `cloudEnabled()`（完整同步）= 两者都齐，仅用于内部判定。
 - **身份来源**：Logto 的 `sub` 经 `X-User-Sub` 头传给后端（当前 passthrough 阶段），
   作为 `(user_sub, tool_id='safekeep', key='vault')` 分区键；不建 users 表。
+- **零知识约束**：云端只存密文，密钥/主密码永不上云。因此「从云端下载解锁」= 下载密文到本机 +
+  **仍用创建保险库时的主密码解密**。换设备能恢复的前提是记得主密码（或持有恢复码）。
 - **手动同步，保守合并**：账号中心提供「检查云端 / 从云端拉取 / 上传到云端」三个显式动作，
   **不做自动推送、不做自动合并**——零知识库里静默覆盖可能丢失条目，故所有覆盖都要用户二次确认：
   - 上传遇 `stale`（云端被其他端更新）→ 提示先拉取，或「强制上传」覆盖（其他端随后需重新拉取）；
@@ -136,6 +141,23 @@ tools/
   让用户用（与云端一致的）主密码重新解锁，避免密钥与 salt 错配。
 - **传输零知识**：只上传 `{fmt, schema, savedAt, rev, account, items}` 密封 blob；
   `parseCloudBlob` 拒收格式损坏/版本不兼容/条目缺 `iv/ct` 的数据，错误信息不泄漏 value 内容。
+
+### 打开工具：双通道解锁（冷启动 / 换设备）
+
+解锁页提供两条入口，覆盖「本机有库」与「本机无库」两种冷启动：
+
+| 场景 | 本地解锁 | 云端恢复 |
+| --- | --- | --- |
+| `welcome`（本机无库，如新设备 / 清了浏览器数据） | 创建保险库 / 从加密备份导入 | 「登录并从云端恢复」→ 下载密文到本机 → 主密码解锁 |
+| `locked`（本机已有库） | 主密码 / 恢复码解锁 | 「从云端下载并恢复」→ 二次确认覆盖 → 主密码解锁 |
+
+**登录回跳续做**（OAuth 回调落站点根、hash 路由无 fragment 带来的额外链路）：
+1. 点云端恢复时若未登录 → `markRestoreIntent()` 在 sessionStorage 记一条**带 TTL（10 分钟）**的意图；
+2. 跳转 Logto，`redirect_uri` = 站点根 `https://<账号>.github.io/tools/`（须在 Logto 后台加白名单）；
+3. 回调落地 → `main.ts` 挂载前消费 `code/state`，并据意图把 hash 定位回 `#/safekeep`；
+4. `useSafeKeep.onMounted` **仅当「本次刚完成 OAuth 回调」+「意图未过期」+「确实已登录」三者同时成立**
+   才自动拉一次云端并回到锁定态；普通刷新/首次打开绝不触发，杜绝静默覆盖；
+5. 意图消费一次即清除（幂等），过期/损坏/时钟回拨一律作废并清理。
 
 ## 数据模型（v0.3 定稿）
 
@@ -213,16 +235,18 @@ tools/
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `VITE_PUBLIC_PATH` | `/tools/` | Vite `base`；仓库名不是 `tools` 或绑自定义域根路径时改这里 |
-| `VITE_API_BASE_URL` | 空 | 后端 HTTPS 根（不含尾斜杠）；空=云端同步关闭 |
-| `VITE_LOGTO_ENDPOINT` | 空 | Logto endpoint，如 `https://<tenant>.logto.app` |
-| `VITE_LOGTO_APP_ID` | 空 | Logto 应用 ID |
+| `VITE_API_BASE_URL` | 空 | **唯一需你填的项**：后端 HTTPS 根（不含尾斜杠）；空=可登录但暂不能上传/下载 |
+| `VITE_LOGTO_ENDPOINT` | `https://account.alsoapp.com` | Logto endpoint，已内联公开默认值；换租户才需覆盖 |
+| `VITE_LOGTO_APP_ID` | `0z2t6jrnf4z9lzy4miusg` | Logto 应用 ID（Public Client，非密钥），已内联；换应用才需覆盖 |
 | `VITE_LOGTO_RESOURCE` | 空 | 可选，API resource（拿 access token 的 audience） |
-| `VITE_LOGTO_REDIRECT_URI` | 自动 | OAuth 回调白名单地址（**无 `#`**），如 `https://<账号>.github.io/tools/` |
+| `VITE_LOGTO_REDIRECT_URI` | 自动拼站点根 | OAuth 回调白名单地址（**无 `#`**），如 `https://<账号>.github.io/tools/`；一般无需填 |
 | `VITE_LOGTO_POST_LOGOUT_REDIRECT_URI` | 同回调 | 登出回跳 |
 | `VITE_LOGTO_SCOPES` | 空 | 逗号分隔的额外 scopes |
 
 > 以上 `VITE_*` 会内联进浏览器 JS，本就公开可见，故用 Actions **Variables**（非 Secret）即可。
-> 任一 `VITE_LOGTO_*` 或 `VITE_API_BASE_URL` 缺失 → 前端自动降级纯本地，不白屏。
+> **登录默认开箱可用**：Logto endpoint/appId 已内联（公共客户端标识，官方示例也明文写在前端，
+> 不含 secret）；即使一个 `VITE_*` 都不配，部署后也能登录，只是后端地址未填时云端读写会给出提示。
+> 加解密与本地功能始终离线可用，绝不白屏。
 
 > **不建 users 表**：`user_sub` 即 Logto `sub`；昵称/头像/邮箱由前端从 Logto 取，后端不落库。
 
@@ -231,9 +255,13 @@ tools/
 1. **仓库**：把本项目推到 GitHub（仓库名决定 Pages 子路径；默认 `tools` → `/tools/`，
    若改名须同步设 `VITE_PUBLIC_PATH=/<新名>/`）。本地分支名为 `main`（与工作流触发分支一致）。
 2. **开启 Pages**：仓库 `Settings > Pages > Build and deployment > Source` 选 **GitHub Actions**。
-3. **配置 Variables**（`Settings > Secrets and variables > Actions > Variables`）：见上表前端一节，
-   至少 `VITE_API_BASE_URL`、`VITE_LOGTO_ENDPOINT`、`VITE_LOGTO_APP_ID`、`VITE_LOGTO_REDIRECT_URI`。
-4. **自动部署**：推 `main`（或手动 Run workflow）触发 `.github/workflows/deploy-pages.yml`：
+3. **配置 Variables**（`Settings > Secrets and variables > Actions > Variables`）：
+   - `VITE_API_BASE_URL`：填后端 HTTPS 域名（后端就绪后；见「部署 B」）。**当前唯一必填项**。
+   - Logto 三件套已内联默认值，可不填；换租户/应用时才用 `VITE_LOGTO_ENDPOINT` / `VITE_LOGTO_APP_ID` 覆盖。
+4. **Logto 后台加回调白名单**（一次性）：在 Logto 控制台该应用 → Redirect URIs 加入
+   `https://<账号>.github.io/tools/`（**无 `#`**），Post Logout Redirect URIs 同理。
+   否则登录会报 `redirect_uri` 未注册。本地 dev 另加 `http://localhost:5173/`。
+5. **自动部署**：推 `main`（或手动 Run workflow）触发 `.github/workflows/deploy-pages.yml`：
    `npm ci` → `npm run build`（含 `vue-tsc` 类型检查）→ 上传 `frontend/dist` → 部署 Pages。
    产物资源路径为 `/tools/assets/*`，路由为 hash（`/tools/#/safekeep`），刷新子路径不 404。
 
@@ -379,11 +407,19 @@ cd backend ; docker compose --env-file .env config
       （`python:3.14-slim`），已加 `ARG PYTHON_IMAGE` 支持国内镜像加速，需云主机实测。
 - [ ] **HTTPS 反代 + CORS**：域名证书、反代放通自定义头/OPTIONS 预检、Pages 源在
       `TOOLS_CORS_ORIGINS` 白名单内，浏览器无 Mixed Content / CORS 报错。
+- [x] **GitHub Actions 部署**：推 `main` 后 Pages 产物 `/tools/` 已可访问、资源 200、hash 路由刷新不 404。
+      （首次部署需在 Settings > Pages 把 Source 选为 GitHub Actions，已实测为唯一阻塞点。）
+- [ ] **Logto 后台回调白名单**（一次性，网页端）：在 Logto 控制台把
+      `https://<账号>.github.io/tools/` 加入 Redirect URIs + Post Logout Redirect URIs，
+      否则登录报 `redirect_uri` 未注册。endpoint/appId 已内联，无需在 Actions 配。
 - [ ] **Logto 真登录回环**：`/tools/` 回调 `code/state` 被 `main.ts` 消费、`sub` 正确落地，
-      登录/登出跳转正常；回调 URI 已在 Logto 控制台加白名单。
-- [ ] **端到端云同步**：登录后「检查云端 → 上传 → 另一设备拉取 → 主密码重新解锁」密文不失真，
+      登录/登出跳转正常；本沙箱无浏览器无法实测跳转。
+- [ ] **填后端地址后端到端云同步**：先在 Settings > Variables 配 `VITE_API_BASE_URL` 重部署，
+      再验「检查云端 → 上传 → 另一设备拉取 → 主密码重新解锁」密文不失真，
       冲突时 `stale`/强制覆盖提示符合预期。
-- [ ] **GitHub Actions 部署**：推 `main` 后 Pages 产物 `/tools/` 可访问、资源 200、刷新子路径不 404。
+- [ ] **冷启动云端恢复全链路**：新设备/清浏览器后，解锁页点「登录并从云端恢复」→
+      Logto 跳转 → 回调落站点根 → 自动回 `#/safekeep` 并拉一次密文 → 主密码解锁；
+      验证普通刷新不会重复拉取/覆盖（恢复意图仅消费一次、TTL 10 分钟）。
 
 ## 工程规范与版本
 
