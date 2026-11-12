@@ -9,7 +9,7 @@
 #     VITE_LOGTO_APP_ID                 Logto 应用 ID（代码内已内联公开默认值）
 #     VITE_LOGTO_RESOURCE               (可选) API resource
 #     VITE_LOGTO_REDIRECT_URI           回调白名单地址（无 fragment），
-#                                      默认 https://liaozhimingandy.github.io/tools/
+#                                      默认 https://www.alsoapp.com/tools/
 #     VITE_LOGTO_POST_LOGOUT_REDIRECT_URI (可选) 登出回跳，同回调
 #     VITE_LOGTO_SCOPES                 (可选) 逗号分隔额外 scopes
 #     VITE_PUBLIC_PATH                  Pages 子路径，默认 /tools/（仓库名不是 tools 时改这里）
@@ -67,8 +67,8 @@ jobs:
         env:
           API_BASE: ${{ vars.VITE_API_BASE_URL || 'https://api.alsoapp.com' }}
           LOGTO_ENDPOINT: ${{ vars.VITE_LOGTO_ENDPOINT || 'https://account.alsoapp.com' }}
-          REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI || 'https://liaozhimingandy.github.io/tools/' }}
-          LOGOUT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI || 'https://liaozhimingandy.github.io/tools/' }}
+          REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI || 'https://www.alsoapp.com/tools/' }}
+          LOGOUT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI || 'https://www.alsoapp.com/tools/' }}
         run: |
           set -euo pipefail
           for pair in "VITE_API_BASE_URL=${API_BASE}" \
@@ -94,8 +94,8 @@ jobs:
           VITE_LOGTO_ENDPOINT: ${{ vars.VITE_LOGTO_ENDPOINT || 'https://account.alsoapp.com' }}
           VITE_LOGTO_APP_ID: ${{ vars.VITE_LOGTO_APP_ID }}
           VITE_LOGTO_RESOURCE: ${{ vars.VITE_LOGTO_RESOURCE }}
-          VITE_LOGTO_REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI || 'https://liaozhimingandy.github.io/tools/' }}
-          VITE_LOGTO_POST_LOGOUT_REDIRECT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI || 'https://liaozhimingandy.github.io/tools/' }}
+          VITE_LOGTO_REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI || 'https://www.alsoapp.com/tools/' }}
+          VITE_LOGTO_POST_LOGOUT_REDIRECT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI || 'https://www.alsoapp.com/tools/' }}
           VITE_LOGTO_SCOPES: ${{ vars.VITE_LOGTO_SCOPES }}
 
       - name: Setup Pages
@@ -116,3 +116,22 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # 自定义域前面挂了 CDN 时，HTML 可能被长 TTL 缓存，导致「部署成功但公网仍是旧版」。
+      # 在摘要里给一条带时间戳的 cache-buster 地址，便于部署后立即验证源站产物。
+      - name: 公网验证地址（绕过 CDN 缓存）
+        run: |
+          TS="$(date +%s)"
+          {
+            echo "### 公网验证"
+            echo ""
+            echo "绕过自定义域 CDN 缓存、直接看本次产物："
+            echo ""
+            echo '```'
+            echo "https://www.alsoapp.com/tools/?v=${TS}#/safekeep"
+            echo '```'
+            echo ""
+            echo "若加参数后出现新功能、不加参数仍是旧版，说明 CDN 把 \`/tools/\` 的 HTML 缓存了。"
+            echo "请在 CDN 控制台把 \`/tools/\` 与 \`/tools/index.html\` 设为不缓存/短 TTL，"
+            echo "\`/tools/assets/*\` 带内容 hash 可保留长缓存；每次部署后 purge 一次 \`/tools/\`。"
+          } >> "$GITHUB_STEP_SUMMARY"

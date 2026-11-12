@@ -6,7 +6,7 @@
 #
 # 用法（在 backend/ 目录下）：
 #   1) cp .env.example .env，填数据库/CORS；再追加一行固定版本：
-#        TOOLS_IMAGE=ghcr.io/liaozhimingandy/tools-backend:sha-<7位commit>
+#        TOOLS_IMAGE=ghcr.io/liaozhimingandy/fastapi-tools:sha-<7位commit>
 #      固定 sha 而不是 latest，回滚与审计才有意义（标签见 Actions 构建报告）。
 #   2) GHCR：本仓库 package 已实测可匿名 `docker pull`，通常无需登录；
 #      若改为私有再执行 docker login ghcr.io -u <github-user> -p <PAT:read:packages>
@@ -36,7 +36,7 @@ services:
         psql -v ON_ERROR_STOP=1 -f /sql/001_tool_configs.sql'
 
   api:
-    image: ${TOOLS_IMAGE:-ghcr.io/liaozhimingandy/tools-backend:latest}
+    image: ${TOOLS_IMAGE:-ghcr.io/liaozhimingandy/fastapi-tools:latest}
     restart: unless-stopped
     depends_on:
       init-db:

@@ -61,7 +61,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: tools-backend
+  IMAGE_NAME: fastapi-tools
   BACKEND_CONTEXT: ./backend
   BACKEND_DOCKERFILE: ./backend/Dockerfile
   DEFAULT_PLATFORMS: linux/amd64
@@ -302,13 +302,13 @@ jobs:
           build-args: |
             PYTHON_IMAGE=${{ vars.PYTHON_IMAGE || 'python:3.14-slim' }}
           labels: |
-            org.opencontainers.image.title=tools-backend
+            org.opencontainers.image.title=fastapi-tools
             org.opencontainers.image.description=tools zero-knowledge config API
             org.opencontainers.image.version=${{ needs.meta.outputs.app_version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=tools-backend
-          cache-to: type=gha,scope=tools-backend,mode=max
+          cache-from: type=gha,scope=fastapi-tools
+          cache-to: type=gha,scope=fastapi-tools,mode=max
           provenance: false
           sbom: false
 

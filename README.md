@@ -25,17 +25,20 @@
 ## 部署拓扑（当前阶段）
 
 ```
-浏览器 ──HTTPS──> GitHub Pages  https://liaozhimingandy.github.io/tools/
+浏览器 ──HTTPS──> CDN / 自定义域 https://www.alsoapp.com/tools/（反代 GitHub Pages）
    │                    │ 构建期内联 VITE_*（全 HTTPS，构建前强制校验）
-   │                    └─ 静态资源 /tools/assets/*
+   │                    │ ⚠️ HTML 缓存必须不缓存 / 短 TTL，否则部署后公网仍是旧版
+   │                    └─ 静态资源 /tools/assets/*（文件名带 hash，可长缓存）
    │
-   └──HTTPS CORS──> https://api.alsoapp.com
-                          │  Nginx / 云 LB 终结 TLS → 127.0.0.1:8080（容器内是 HTTP）
-                          │  TOOLS_AUTH_MODE=passthrough（暂时不鉴权）
-                          └─ 外部托管 PostgreSQL 18.3（:6432 直连）
+   ├──HTTPS CORS──> https://api.alsoapp.com
+   │                     │  Nginx / 云 LB 终结 TLS → 127.0.0.1:8080（容器内是 HTTP）
+   │                     │  TOOLS_AUTH_MODE=passthrough（暂时不鉴权）
+   │                     └─ 外部托管 PostgreSQL 18.3（:6432 直连）
+   │
+   └──OAuth──> Logto https://account.alsoapp.com
+                 回调落在 https://www.alsoapp.com/tools/（无 #，须与访问域同 origin）
 
-   Logto https://account.alsoapp.com ── 回调落在
-        https://liaozhimingandy.github.io/tools/（无 #）
+   Pages 源站 liaozhimingandy.github.io/tools/ → 301 到自定义域
 ```
 
 - **前端**：GitHub Actions 推 `main` 自动 `npm ci && npm run build` 部署到 Pages；
@@ -237,7 +240,7 @@ tools/
 | `TOOLS_DEV_AUTH_HEADER` | `X-User-Sub` | passthrough / dev 信任的头 |
 | `TOOLS_PASSTHROUGH_DEFAULT_SUB` | `anonymous` | 请求缺身份头时的归属槽位 |
 | `LOGTO_ISSUER` / `LOGTO_AUDIENCE` / `LOGTO_JWKS_URL` | 空 | 切 `logto` 时的三件套；任一空即 fail-closed 拒绝所有请求 |
-| `TOOLS_CORS_ORIGINS` | 空 | 逗号分隔的跨域白名单（Pages 源 + 自定义域），去尾斜杠；空=仅同源 |
+| `TOOLS_CORS_ORIGINS` | 空 | 逗号分隔的跨域白名单，生产填 `https://www.alsoapp.com`（**前端 origin，不是后端域名**），去尾斜杠；空=仅同源 |
 | `TOOLS_PUBLIC_PATH` | `/tools/` | 后端托管 dist 时的公网基路径，**须与前端 `VITE_PUBLIC_PATH`/`base` 一致**；根部署设 `/` |
 | `TOOLS_MAX_VALUE_BYTES` | `524288` | 单条 value 大小全局默认（512 KiB）；可被 `tools.default_max_value_bytes` 覆盖 |
 | `TOOLS_MAX_KEYS` | `200` | 单用户单工具 key 数全局默认；可被 `tools.default_max_keys` 覆盖 |
@@ -252,7 +255,7 @@ tools/
 | `VITE_LOGTO_ENDPOINT` | `https://account.alsoapp.com` | Logto endpoint，已内联公开默认值；换租户才需覆盖 |
 | `VITE_LOGTO_APP_ID` | `0z2t6jrnf4z9lzy4miusg` | Logto 应用 ID（Public Client，非密钥），已内联；换应用才需覆盖 |
 | `VITE_LOGTO_RESOURCE` | 空 | 可选，API resource（拿 access token 的 audience） |
-| `VITE_LOGTO_REDIRECT_URI` | `https://liaozhimingandy.github.io/tools/` | OAuth 回调白名单地址（**无 `#`**）；一般无需填 |
+| `VITE_LOGTO_REDIRECT_URI` | `https://www.alsoapp.com/tools/` | OAuth 回调白名单地址（**无 `#`**）；一般无需填 |
 | `VITE_LOGTO_POST_LOGOUT_REDIRECT_URI` | 同回调 | 登出回跳 |
 | `VITE_LOGTO_SCOPES` | 空 | 逗号分隔的额外 scopes |
 
@@ -278,11 +281,11 @@ tools/
 2. **开启 Pages**：仓库 `Settings > Pages > Build and deployment > Source` 选 **GitHub Actions**。
 3. **Variables 已可零配置**：`deploy-github-pages.yml` 内置
    `VITE_API_BASE_URL=https://api.alsoapp.com`、回调/登出均为
-   `https://liaozhimingandy.github.io/tools/`，Logto endpoint/appId 内联在 `src/config.ts`。
+   `https://www.alsoapp.com/tools/`，Logto endpoint/appId 内联在 `src/config.ts`。
    只有换域名/租户/应用时才需要到 `Settings > Secrets and variables > Actions > Variables` 覆盖。
    ⚠️ 若里面还留着本地测试用的 `http://localhost:5173/tools/`，构建会被 HTTPS 校验拦下，先删掉。
 4. **Logto 后台加回调白名单**（一次性，网页端）：在该应用 → Redirect URIs 加入
-   `https://liaozhimingandy.github.io/tools/`（**无 `#`**），Post Logout Redirect URIs 同理，
+   `https://www.alsoapp.com/tools/`（**无 `#`**），Post Logout Redirect URIs 同理，
    否则线上登录报 `oidc.invalid_redirect_uri`。本地 dev 另加 `http://localhost:5173/tools/`，
    两者可共存（不要为了本地测试删掉线上地址）。
 5. **自动部署**：推 `main`（或手动 Run workflow）触发
@@ -291,6 +294,33 @@ tools/
    产物资源路径为 `/tools/assets/*`，路由为 hash（`/tools/#/safekeep`），刷新子路径不 404。
 
 > 工作流只监听 `frontend/**` 与自身变动；改 Actions Variables 后需手动 Run workflow 才重新内联。
+
+### A.6 自定义域 CDN 缓存（公网「看不到新功能」的头号原因）
+
+**症状**（2026-11-12 实测）：`https://www.alsoapp.com/tools/#/safekeep` 显示旧版
+「仅本地 · 云端未配置」「本版本为本地 MVP」，**没有「登录并从云端恢复」区块**；
+但给 URL 加一个随机参数（`https://www.alsoapp.com/tools/?v=<时间戳>#/safekeep`）
+刷新后，同一站点立刻出现新版 UI 与云端恢复按钮。控制台 0 错误，Actions 部署也全绿。
+
+**根因**：`www.alsoapp.com` 前面挂了 CDN（`Server: ESA`、`Via: varnish / ens-cache`），
+它把 `/tools/` 的 **HTML** 按 30 天缓存了。实测响应头：
+
+| 请求 | `X-Site-Cache-Status` | `Age` | `X-Swift-CacheTime` | HTML 引用的 JS |
+| --- | --- | --- | --- | --- |
+| `/tools/`（无 query） | `HIT` | 10641 秒 | 2592000 秒（30 天） | 旧版 `index-MiR_k2HO.js` |
+| `/tools/?v=<随机>` | `MISS` → 回源 | 0 | — | 新版 `index-CukkxDDa.js` |
+
+GitHub Pages 本身只给 `Cache-Control: max-age=600`，但 CDN 规则覆盖了它。
+**这不是代码缺陷**：产物已是新版，只是公网入口仍吐缓存的旧 HTML。
+
+**处理（在 CDN 控制台，仓库侧无法代劳）**：
+
+1. `/tools/` 与 `/tools/index.html` → 设为**不缓存**或 TTL ≤ 600 秒（HTML 是入口，必须能及时更新）；
+2. `/tools/assets/*` → 可保持 30 天长缓存（文件名带内容 hash，新版会换文件名，不会串味）；
+3. 每次 Pages 部署成功后，刷新（purge）一次 `/tools/` 目录；
+4. 临时验证：`https://www.alsoapp.com/tools/?v=<时间戳>#/safekeep`，绕过缓存键直接看源站产物。
+
+> Actions 的部署作业会把一条带时间戳的 cache-buster 验证地址写进 Step Summary。
 
 ## 部署 B：后端镜像 → 云主机（`https://api.alsoapp.com`）
 
@@ -307,11 +337,16 @@ tools/
 | 项 | 值 |
 | --- | --- |
 | 构建上下文 | `./backend`（`backend/Dockerfile`，**不是仓库根**） |
-| 默认镜像 | `ghcr.io/liaozhimingandy/tools-backend` |
+| 默认镜像 | `ghcr.io/liaozhimingandy/fastapi-tools` |
 | 标签 | `:dev`、`:sha-<7位commit>`、`:latest`、`:<APP_VERSION>`（当前 `0.4.0`） |
 | 凭据 | GHCR 用仓库自带 `GITHUB_TOKEN` + `packages: write`，**零配置必推** |
 | 可选同步推 | Docker Hub：`DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`；阿里云 ACR：`ALIYUN_REGISTRY` + `vars.ALIYUN_NAMESPACE` + 账号密码。配错的凭据只跳过并告警，不拖垮 GHCR |
 | 推送后校验 | 拉起容器验镜像内 `/app/app/main.py`、`/app/sql/001_tool_configs.sql`，并请求 `/v1/health` 与 `/v1/version` |
+
+> **镜像名已改为 `fastapi-tools`**（旧的 `tools-backend` 不再产出新标签）。
+> 若 Actions Variables 里设过 `DOCKER_REPOSITORY`，它会**整个覆盖** Docker Hub 侧的
+> `<ns>/<repo>`，改名后请同步更新该变量；GHCR 侧始终由工作流里的 `IMAGE_NAME` 决定。
+> 云主机 `backend/.env` 的 `TOOLS_IMAGE` 也要换成新名字对应的 `sha-<commit>` 标签。
 
 > **实测**：`ba9c4b2` 首次构建即成功推送 GHCR 与 Docker Hub（`DOCKERHUB_*` 凭据有效），
 > ACR 未配置按设计跳过；修复 verify 后 `3b633dc` 的 run `43196343915` 四个作业全绿。
@@ -340,7 +375,7 @@ PGPASSWORD='<pass>' psql -h <host> -p 6432 -U tools -d tools \
 
 # 1) 填 env：cp .env.example .env
 #    TOOLS_PG_HOST/PORT/NAME/USER/PASSWORD、TOOLS_CORS_ORIGINS、
-#    TOOLS_IMAGE=ghcr.io/liaozhimingandy/tools-backend:sha-<7位commit>（固定版本，勿用 latest）
+#    TOOLS_IMAGE=ghcr.io/liaozhimingandy/fastapi-tools:sha-<7位commit>（固定版本，勿用 latest）
 # 2) 登录 GHCR（把 package 设为 public 后可跳过）
 docker login ghcr.io -u <github-user> -p <PAT:read:packages>
 # 3) 拉现成镜像部署（推荐，云主机不编译）
@@ -385,7 +420,7 @@ server {
 server { listen 80; server_name api.alsoapp.com; return 301 https://$host$request_uri; }
 ```
 
-`.env` 里 `TOOLS_CORS_ORIGINS=https://liaozhimingandy.github.io`
+`.env` 里 `TOOLS_CORS_ORIGINS=https://www.alsoapp.com`
 （**只填前端 origin，不带路径、不带尾斜杠；不是填后端域名**）。
 若还要本地联调，可追加 `,http://localhost:5173`，两者共存。
 
@@ -394,18 +429,18 @@ server { listen 80; server_name api.alsoapp.com; return 301 https://$host$reques
 ```bash
 curl -i https://api.alsoapp.com/v1/health
 curl -i -X OPTIONS https://api.alsoapp.com/v1/configs/safekeep/vault \
-  -H 'Origin: https://liaozhimingandy.github.io' \
+  -H 'Origin: https://www.alsoapp.com' \
   -H 'Access-Control-Request-Method: GET' \
   -H 'Access-Control-Request-Headers: x-user-sub,content-type'
 ```
 
-预检应返回 `Access-Control-Allow-Origin: https://liaozhimingandy.github.io`。
+预检应返回 `Access-Control-Allow-Origin: https://www.alsoapp.com`。
 
 ## 部署 C：Logto 配置
 
 1. 在 Logto 控制台建 **Single Page App**，把**所有需要登录的部署地址**逐一加入 Redirect URI
    与 Post-logout URI 白名单（**必须无 `#`**，Logto 对 redirect_uri 做精确匹配）：
-   - 线上：`https://liaozhimingandy.github.io/tools/`（绑自定义域则用 `https://<域>/tools/`）
+   - 线上（唯一生产回调）：`https://www.alsoapp.com/tools/`，必须与 `VITE_LOGTO_REDIRECT_URI` 默认值逐字一致
    - 本地联调：`http://localhost:5173/tools/`
    - ⚠️ 实测：**`localhost` 与 `127.0.0.1` 是两个不同 origin**，`/` 与 `/tools/` 也是两个不同 URI。
      只配 `http://localhost:5173/` 而页面落在 `/tools/`，会直接报
@@ -612,12 +647,14 @@ python tests/pg_integration_check.py
 cd backend ; docker compose --env-file .env config
 ```
 
-**当前基线**：前端 `63/63` 单测、`vue-tsc` 类型检查、`vite build` 全绿；
+**当前基线**：前端 `68/68` 单测（含 `deploy-defaults.test.ts` 生产默认值守卫）、
+`vue-tsc` 类型检查、`vite build` 全绿；
 后端 `73/73` unittest 全绿；两份 `docker compose config` 渲染通过；
-两个 workflow 的 YAML 解析 + 12 项工程结构一致性检查通过；
+两个 workflow 的 YAML 解析通过；
 按 Pages workflow 的生产变量重建产物后扫描：含
-`https://api.alsoapp.com` / `https://liaozhimingandy.github.io/tools/`，
-**0 处** `localhost` / `127.0.0.1` / `http://api`（残留 `http://` 均为 SVG/W3C XML 命名空间）；
+`https://api.alsoapp.com` / `https://www.alsoapp.com/tools/` / `https://account.alsoapp.com`，
+**0 处** `localhost` / `127.0.0.1` / `http://api` / 旧 `github.io` 回调
+（残留 `http://` 仅为 SVG/W3C XML 命名空间）；
 **真实云数据库 `/v1` 端到端 19/19 通过** + 浏览器冷启动恢复闭环通过
 （见「本地端到端联调」表格）。
 
@@ -638,13 +675,19 @@ cd backend ; docker compose --env-file .env config
       `docker compose -f docker-compose.image.yml up -d` 并配好 `api.alsoapp.com` HTTPS 反代
       （见 B2/B3）；源码构建路径仍需云主机实测（本环境拉不到 `python:3.14-slim`，
       已加 `ARG PYTHON_IMAGE` 支持国内镜像加速）。
-- [ ] **`api.alsoapp.com` HTTPS 反代 + CORS**：证书、`location /v1/` 转发到
-      `127.0.0.1:8080`、放通 `X-User-Sub`/`Authorization` 与 `OPTIONS` 预检、
-      `TOOLS_CORS_ORIGINS=https://liaozhimingandy.github.io`；浏览器无 Mixed Content / CORS 报错。
-- [ ] **线上 Logto 回调白名单**（一次性，网页端）：⚠️ 实测当前白名单只剩
-      `http://localhost:5173/tools/`，**线上 `https://liaozhimingandy.github.io/tools/` 已被移除**，
-      线上登录会报 `oidc.invalid_redirect_uri`。请把线上地址加回 Redirect URIs 与
-      Post Logout Redirect URIs（保留本地地址，二者可共存）。
+- [ ] **`api.alsoapp.com` DNS + HTTPS 反代 + CORS**：⚠️ 2026-11-12 实测
+      `api.alsoapp.com` **DNS 不存在**（`DNS name does not exist`），云端同步必然连不上。
+      先加 A 记录指向云主机、配证书、`location /v1/` 转发到 `127.0.0.1:8080`、
+      放通 `X-User-Sub`/`Authorization` 与 `OPTIONS` 预检、
+      `TOOLS_CORS_ORIGINS=https://www.alsoapp.com`（**前端 origin，不是后端域名**）。
+- [ ] **线上 Logto 回调白名单**（一次性，网页端）：⚠️ 2026-11-12 实测仅
+      `http://localhost:5173/tools/` 被接受（303），`https://www.alsoapp.com/tools/` 与
+      `https://liaozhimingandy.github.io/tools/` 均返回 400。请把
+      **`https://www.alsoapp.com/tools/`** 加入 Redirect URIs 与 Post Logout Redirect URIs
+      （保留本地地址）。同时确认 Actions Variables 里没有残留旧的
+      `VITE_LOGTO_REDIRECT_URI`，否则它会覆盖新的生产默认值。
+- [ ] **CDN 缓存刷新**：见 A.6。部署后在自定义域 CDN 控制台 purge `/tools/`，
+      并把 HTML 缓存规则改为不缓存 / 短 TTL，否则公网会长期停在旧版「本地 MVP」页面。
 - [ ] **真实 Logto 账号完成一次登录**：本环境无账号凭据；Edge 已实测能跳到
       `account.alsoapp.com/sign-in` 登录页、回调 URL 归一化与意图续做也有单测覆盖，
       仍需本人用真实账号登录，确认 `sub` 落地、登出正常。
