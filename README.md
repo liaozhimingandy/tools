@@ -313,9 +313,10 @@ tools/
 | 可选同步推 | Docker Hub：`DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`；阿里云 ACR：`ALIYUN_REGISTRY` + `vars.ALIYUN_NAMESPACE` + 账号密码。配错的凭据只跳过并告警，不拖垮 GHCR |
 | 推送后校验 | 拉起容器验镜像内 `/app/app/main.py`、`/app/sql/001_tool_configs.sql`，并请求 `/v1/health` 与 `/v1/version` |
 
-> **首次运行实测**（`ba9c4b2`）：镜像已构建并推送到 GHCR 与 Docker Hub
-> （`DOCKERHUB_*` 凭据有效），ACR 未配置自动跳过；`sha-ba9c4b2` / `latest` 标签
-> 经 `docker manifest inspect` 确认**可匿名拉取**，云主机通常无需 `docker login`。
+> **实测**：`ba9c4b2` 首次构建即成功推送 GHCR 与 Docker Hub（`DOCKERHUB_*` 凭据有效），
+> ACR 未配置按设计跳过；修复 verify 后 `3b633dc` 的 run `43196343915` 四个作业全绿。
+> `sha-*` / `latest` 标签经 `docker manifest inspect` 确认**可匿名拉取**，
+> 云主机通常无需 `docker login`。
 > 首次 `verify` 作业曾因跨 job 传镜像名被 GitHub 当作疑似密钥静默丢弃而失败，
 > 现已改为各作业现场拼装。**调试经验**：含 secret 子串的字符串不能作为 job output
 > 传递——owner 常与 `DOCKERHUB_USERNAME` 同值，GitHub 会静默丢弃该 output，
@@ -629,11 +630,14 @@ cd backend ; docker compose --env-file .env config
       （首次部署需在 Settings > Pages 把 Source 选为 GitHub Actions，已实测为唯一阻塞点。）
 - [x] **本地登录跳转 + 回调归位**：Edge 实测点击「登录并从云端恢复」跳到 Logto 登录页、
       `signInSession.redirectUri` 正确、恢复意图写入、伪造回调落地后归位 `#/safekeep` 且不误覆盖。
-- [ ] **云主机拉取镜像并起容器**：`build-images.yml` 已在 Actions 构建推送到 GHCR；
-      需在云主机实测 `docker login ghcr.io` → `docker pull ...:sha-<commit>` →
-      `docker compose -f docker-compose.image.yml up -d` → `/v1/health` 200。
-      本机无法拉取 `python:3.14-slim`，故源码构建路径仍需云主机实测
-      （已加 `ARG PYTHON_IMAGE` 支持国内镜像加速）。
+- [x] **镜像构建与推送（Actions）**：run `43196343915` 四个作业全绿
+      （版本计算 / 构建推送 / 拉取并冒烟 / 构建报告）；已推 GHCR + Docker Hub，
+      阿里云 ACR 未配置按设计跳过。本机匿名 `docker pull ...:sha-ba9c4b2` 后起容器实测：
+      镜像内文件布局齐全、`/v1/health` 200、`/v1/version` 返回 `0.4.0`。
+- [ ] **云主机部署**：还需在云主机执行
+      `docker compose -f docker-compose.image.yml up -d` 并配好 `api.alsoapp.com` HTTPS 反代
+      （见 B2/B3）；源码构建路径仍需云主机实测（本环境拉不到 `python:3.14-slim`，
+      已加 `ARG PYTHON_IMAGE` 支持国内镜像加速）。
 - [ ] **`api.alsoapp.com` HTTPS 反代 + CORS**：证书、`location /v1/` 转发到
       `127.0.0.1:8080`、放通 `X-User-Sub`/`Authorization` 与 `OPTIONS` 预检、
       `TOOLS_CORS_ORIGINS=https://liaozhimingandy.github.io`；浏览器无 Mixed Content / CORS 报错。
