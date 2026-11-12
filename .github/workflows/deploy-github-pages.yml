@@ -4,7 +4,7 @@
 #
 # 需要的仓库变量/密钥（Settings > Secrets and variables > Actions）：
 #   Variables（非敏感，可明文；均可用 vars 覆盖，未配时用下方内置生产默认值）：
-#     VITE_API_BASE_URL                 后端 HTTPS 根，默认 https://api.alsoapp.com
+#     VITE_API_BASE_URL                 后端 HTTPS 根，默认 https://api-tools.alsoapp.com
 #     VITE_LOGTO_ENDPOINT               Logto endpoint，默认 https://account.alsoapp.com
 #     VITE_LOGTO_APP_ID                 Logto 应用 ID（代码内已内联公开默认值）
 #     VITE_LOGTO_RESOURCE               (可选) API resource
@@ -65,7 +65,7 @@ jobs:
       # 并在构建前拦截 http://，防止旧 Variable 造出 Mixed Content 页面。
       - name: 校验生产地址均为 HTTPS
         env:
-          API_BASE: ${{ vars.VITE_API_BASE_URL || 'https://api.alsoapp.com' }}
+          API_BASE: ${{ vars.VITE_API_BASE_URL || 'https://api-tools.alsoapp.com' }}
           LOGTO_ENDPOINT: ${{ vars.VITE_LOGTO_ENDPOINT || 'https://account.alsoapp.com' }}
           REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI || 'https://www.alsoapp.com/tools/' }}
           LOGOUT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI || 'https://www.alsoapp.com/tools/' }}
@@ -89,8 +89,8 @@ jobs:
         run: npm run build
         env:
           VITE_PUBLIC_PATH: ${{ vars.VITE_PUBLIC_PATH || '/tools/' }}
-          # 线上后端域名：api.alsoapp.com（HTTPS 反代到云主机容器 :8080）
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.alsoapp.com' }}
+          # 线上后端域名：api-tools.alsoapp.com（HTTPS 反代到云主机容器 :8080）
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api-tools.alsoapp.com' }}
           VITE_LOGTO_ENDPOINT: ${{ vars.VITE_LOGTO_ENDPOINT || 'https://account.alsoapp.com' }}
           VITE_LOGTO_APP_ID: ${{ vars.VITE_LOGTO_APP_ID }}
           VITE_LOGTO_RESOURCE: ${{ vars.VITE_LOGTO_RESOURCE }}

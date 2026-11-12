@@ -30,7 +30,7 @@
    │                    │ ⚠️ HTML 缓存必须不缓存 / 短 TTL，否则部署后公网仍是旧版
    │                    └─ 静态资源 /tools/assets/*（文件名带 hash，可长缓存）
    │
-   ├──HTTPS CORS──> https://api.alsoapp.com
+   ├──HTTPS CORS──> https://api-tools.alsoapp.com
    │                     │  Nginx / 云 LB 终结 TLS → 127.0.0.1:8080（容器内是 HTTP）
    │                     │  TOOLS_AUTH_MODE=passthrough（暂时不鉴权）
    │                     └─ 外部托管 PostgreSQL 18.3（:6432 直连）
@@ -44,7 +44,7 @@
 - **前端**：GitHub Actions 推 `main` 自动 `npm ci && npm run build` 部署到 Pages；
   `base=/tools/`，路由用 hash 模式（`/tools/#/safekeep`），刷新子路径不 404，
   Logto 回调（`redirect_uri` 禁止带 `#`）落到站点根 `/tools/`，挂载前由 `main.ts` 消费 `code/state`。
-- **后端**：容器化部署在云主机，对外域名固定 **`https://api.alsoapp.com`**。
+- **后端**：容器化部署在云主机，对外域名固定 **`https://api-tools.alsoapp.com`**。
   全部链路 HTTPS：Pages 是 HTTPS，若后端走 HTTP 会被浏览器 Mixed Content 拦截。
   TLS 在 Nginx/Caddy/云负载均衡终结后转 `127.0.0.1:8080`，证书不进镜像。
 - **数据库**：外部托管 PostgreSQL 18.3（实测 `:6432` 是直连端口，不是 PgBouncer），
@@ -204,7 +204,7 @@ tools/
 
 > **接口前缀统一为 `/v1`，没有 `/api` 段**：`/v1/health`、`/v1/version`、
 > `/v1/auth/mode`、`/v1/tools`、`/v1/configs/*`。`VITE_API_BASE_URL` 只填域名
-> （生产 `https://api.alsoapp.com`），路径由 `services/cloud/client.ts` 拼接。
+> （生产 `https://api-tools.alsoapp.com`），路径由 `services/cloud/client.ts` 拼接。
 > 旧 `/api/*` 不再注册任何接口，请求会落到 SPA 回退。
 
 | 方法 | 路径 | 说明 |
@@ -251,7 +251,7 @@ tools/
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `VITE_PUBLIC_PATH` | `/tools/` | Vite `base`；仓库名不是 `tools` 或绑自定义域根路径时改这里 |
-| `VITE_API_BASE_URL` | `https://api.alsoapp.com` | 后端 HTTPS 根（不含尾斜杠）；空=可登录但暂不能上传/下载 |
+| `VITE_API_BASE_URL` | `https://api-tools.alsoapp.com` | 后端 HTTPS 根（不含尾斜杠）；空=可登录但暂不能上传/下载 |
 | `VITE_LOGTO_ENDPOINT` | `https://account.alsoapp.com` | Logto endpoint，已内联公开默认值；换租户才需覆盖 |
 | `VITE_LOGTO_APP_ID` | `0z2t6jrnf4z9lzy4miusg` | Logto 应用 ID（Public Client，非密钥），已内联；换应用才需覆盖 |
 | `VITE_LOGTO_RESOURCE` | 空 | 可选，API resource（拿 access token 的 audience） |
@@ -280,7 +280,7 @@ tools/
    若改名须同步设 `VITE_PUBLIC_PATH=/<新名>/`）。本地分支名为 `main`（与工作流触发分支一致）。
 2. **开启 Pages**：仓库 `Settings > Pages > Build and deployment > Source` 选 **GitHub Actions**。
 3. **Variables 已可零配置**：`deploy-github-pages.yml` 内置
-   `VITE_API_BASE_URL=https://api.alsoapp.com`、回调/登出均为
+   `VITE_API_BASE_URL=https://api-tools.alsoapp.com`、回调/登出均为
    `https://www.alsoapp.com/tools/`，Logto endpoint/appId 内联在 `src/config.ts`。
    只有换域名/租户/应用时才需要到 `Settings > Secrets and variables > Actions > Variables` 覆盖。
    ⚠️ 若里面还留着本地测试用的 `http://localhost:5173/tools/`，构建会被 HTTPS 校验拦下，先删掉。
@@ -322,11 +322,11 @@ GitHub Pages 本身只给 `Cache-Control: max-age=600`，但 CDN 规则覆盖了
 
 > Actions 的部署作业会把一条带时间戳的 cache-buster 验证地址写进 Step Summary。
 
-## 部署 B：后端镜像 → 云主机（`https://api.alsoapp.com`）
+## 部署 B：后端镜像 → 云主机（`https://api-tools.alsoapp.com`）
 
 > 真实数据库口令/IP **只写入 gitignore 的 `backend/.env`**，仓库内 `.env.example` 全是占位符；
 > 切勿把口令提交进仓库（本仓库公开）。
-> **全 HTTPS**：容器内仍是裸 HTTP `:8080`、只绑回环；TLS 由 `api.alsoapp.com` 的
+> **全 HTTPS**：容器内仍是裸 HTTP `:8080`、只绑回环；TLS 由 `api-tools.alsoapp.com` 的
 > Nginx / 云负载均衡终结后转发，证书不进镜像。
 
 ### B1. 构建镜像（`.github/workflows/build-images.yml`）
@@ -398,14 +398,14 @@ api 以非 root 运行、只读文件系统、`/tmp` 为 tmpfs。
 ### B3. HTTPS 反代 + CORS（必需）
 
 Pages 是 HTTPS，浏览器会拦截其到 `http://` 后端的请求（Mixed Content）。
-在 `api.alsoapp.com` 终结 TLS，只把 `/v1/` 转发给容器：
+在 `api-tools.alsoapp.com` 终结 TLS，只把 `/v1/` 转发给容器：
 
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name api.alsoapp.com;
-    ssl_certificate     /etc/letsencrypt/live/api.alsoapp.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.alsoapp.com/privkey.pem;
+    server_name api-tools.alsoapp.com;
+    ssl_certificate     /etc/letsencrypt/live/api-tools.alsoapp.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api-tools.alsoapp.com/privkey.pem;
 
     location /v1/ {
         proxy_pass http://127.0.0.1:8080;
@@ -417,7 +417,7 @@ server {
     }
     location / { return 404; }   # 镜像内没有 dist，静态资源由 Pages 提供
 }
-server { listen 80; server_name api.alsoapp.com; return 301 https://$host$request_uri; }
+server { listen 80; server_name api-tools.alsoapp.com; return 301 https://$host$request_uri; }
 ```
 
 `.env` 里 `TOOLS_CORS_ORIGINS=https://www.alsoapp.com`
@@ -427,8 +427,8 @@ server { listen 80; server_name api.alsoapp.com; return 301 https://$host$reques
 验证：
 
 ```bash
-curl -i https://api.alsoapp.com/v1/health
-curl -i -X OPTIONS https://api.alsoapp.com/v1/configs/safekeep/vault \
+curl -i https://api-tools.alsoapp.com/v1/health
+curl -i -X OPTIONS https://api-tools.alsoapp.com/v1/configs/safekeep/vault \
   -H 'Origin: https://www.alsoapp.com' \
   -H 'Access-Control-Request-Method: GET' \
   -H 'Access-Control-Request-Headers: x-user-sub,content-type'
@@ -652,7 +652,7 @@ cd backend ; docker compose --env-file .env config
 后端 `73/73` unittest 全绿；两份 `docker compose config` 渲染通过；
 两个 workflow 的 YAML 解析通过；
 按 Pages workflow 的生产变量重建产物后扫描：含
-`https://api.alsoapp.com` / `https://www.alsoapp.com/tools/` / `https://account.alsoapp.com`，
+`https://api-tools.alsoapp.com` / `https://www.alsoapp.com/tools/` / `https://account.alsoapp.com`，
 **0 处** `localhost` / `127.0.0.1` / `http://api` / 旧 `github.io` 回调
 （残留 `http://` 仅为 SVG/W3C XML 命名空间）；
 **真实云数据库 `/v1` 端到端 19/19 通过** + 浏览器冷启动恢复闭环通过
@@ -672,11 +672,11 @@ cd backend ; docker compose --env-file .env config
       阿里云 ACR 未配置按设计跳过。本机匿名 `docker pull ...:sha-ba9c4b2` 后起容器实测：
       镜像内文件布局齐全、`/v1/health` 200、`/v1/version` 返回 `0.4.0`。
 - [ ] **云主机部署**：还需在云主机执行
-      `docker compose -f docker-compose.image.yml up -d` 并配好 `api.alsoapp.com` HTTPS 反代
+      `docker compose -f docker-compose.image.yml up -d` 并配好 `api-tools.alsoapp.com` HTTPS 反代
       （见 B2/B3）；源码构建路径仍需云主机实测（本环境拉不到 `python:3.14-slim`，
       已加 `ARG PYTHON_IMAGE` 支持国内镜像加速）。
-- [ ] **`api.alsoapp.com` DNS + HTTPS 反代 + CORS**：⚠️ 2026-11-12 实测
-      `api.alsoapp.com` **DNS 不存在**（`DNS name does not exist`），云端同步必然连不上。
+- [ ] **`api-tools.alsoapp.com` DNS + HTTPS 反代 + CORS**：⚠️ 2026-11-12 实测
+      `api-tools.alsoapp.com` **DNS 不存在**（`DNS name does not exist`），云端同步必然连不上。
       先加 A 记录指向云主机、配证书、`location /v1/` 转发到 `127.0.0.1:8080`、
       放通 `X-User-Sub`/`Authorization` 与 `OPTIONS` 预检、
       `TOOLS_CORS_ORIGINS=https://www.alsoapp.com`（**前端 origin，不是后端域名**）。
@@ -695,7 +695,7 @@ cd backend ; docker compose --env-file .env config
 - [ ] **真实 Logto 账号完成一次登录**：本环境无账号凭据；Edge 已实测能跳到
       `account.alsoapp.com/sign-in` 登录页、回调 URL 归一化与意图续做也有单测覆盖，
       仍需本人用真实账号登录，确认 `sub` 落地、登出正常。
-- [ ] **线上端到端云同步**：`VITE_API_BASE_URL=https://api.alsoapp.com` 已内置到
+- [ ] **线上端到端云同步**：`VITE_API_BASE_URL=https://api-tools.alsoapp.com` 已内置到
       `deploy-github-pages.yml`，重部署后验「检查云端 → 上传 → 另一设备拉取 →
       主密码重新解锁」密文不失真，冲突时 `stale`/强制覆盖提示符合预期。
       ⚠️ 若 Actions Variables 里仍留着 `http://` 旧值，构建会被 HTTPS 校验拦下，需先删除。

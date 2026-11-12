@@ -2,7 +2,7 @@
 # 云主机部署：直接拉取 GitHub Actions 构建好的镜像，不在云主机上编译。
 #
 # 与 docker-compose.yml 的区别：api 服务用 image 而非 build，端口只绑回环地址，
-# 由 https://api.alsoapp.com 的 Nginx / 云 LB 终结 TLS 后转发，不对外暴露裸 HTTP。
+# 由 https://api-tools.alsoapp.com 的 Nginx / 云 LB 终结 TLS 后转发，不对外暴露裸 HTTP。
 #
 # 用法（在 backend/ 目录下）：
 #   1) cp .env.example .env，填数据库/CORS；再追加一行固定版本：

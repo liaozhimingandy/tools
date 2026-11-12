@@ -26,7 +26,7 @@ function read(rel: string): string {
 
 const PROD_ORIGIN = 'https://www.alsoapp.com'
 const PROD_CALLBACK = 'https://www.alsoapp.com/tools/'
-const PROD_API = 'https://api.alsoapp.com'
+const PROD_API = 'https://api-tools.alsoapp.com'
 
 test('Pages 工作流生产回调与登出回跳必须是自定义域（与访问域同 origin）', () => {
   const wf = read('.github/workflows/deploy-github-pages.yml')
@@ -43,8 +43,8 @@ test('Pages 工作流生产回调与登出回跳必须是自定义域（与访�
 
 test('生产地址全 HTTPS：API 根 / Logto endpoint / 回调 / 登出', () => {
   const wf = read('.github/workflows/deploy-github-pages.yml')
-  assert.match(wf, /\$\{\{ vars\.VITE_API_BASE_URL \|\| 'https:\/\/api\.alsoapp\.com' \}\}/)
-  assert.match(wf, /VITE_API_BASE_URL:.*https:\/\/api\.alsoapp\.com/)
+  assert.match(wf, /\$\{\{ vars\.VITE_API_BASE_URL \|\| 'https:\/\/api-tools\.alsoapp\.com' \}\}/)
+  assert.match(wf, /VITE_API_BASE_URL:.*https:\/\/api-tools\.alsoapp\.com/)
   assert.match(wf, /VITE_LOGTO_ENDPOINT:.*https:\/\/account\.alsoapp\.com/)
   assert.match(wf, /VITE_LOGTO_REDIRECT_URI:.*https:\/\/www\.alsoapp\.com\/tools\//)
   assert.match(wf, /VITE_LOGTO_POST_LOGOUT_REDIRECT_URI:.*https:\/\/www\.alsoapp\.com\/tools\//)
