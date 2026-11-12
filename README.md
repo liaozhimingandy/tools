@@ -313,6 +313,16 @@ tools/
 | 可选同步推 | Docker Hub：`DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`；阿里云 ACR：`ALIYUN_REGISTRY` + `vars.ALIYUN_NAMESPACE` + 账号密码。配错的凭据只跳过并告警，不拖垮 GHCR |
 | 推送后校验 | 拉起容器验镜像内 `/app/app/main.py`、`/app/sql/001_tool_configs.sql`，并请求 `/v1/health` 与 `/v1/version` |
 
+> **首次运行实测**（`ba9c4b2`）：镜像已构建并推送到 GHCR 与 Docker Hub
+> （`DOCKERHUB_*` 凭据有效），ACR 未配置自动跳过；`sha-ba9c4b2` / `latest` 标签
+> 经 `docker manifest inspect` 确认**可匿名拉取**，云主机通常无需 `docker login`。
+> 首次 `verify` 作业曾因跨 job 传镜像名被 GitHub 当作疑似密钥静默丢弃而失败，
+> 现已改为各作业现场拼装。**调试经验**：含 secret 子串的字符串不能作为 job output
+> 传递——owner 常与 `DOCKERHUB_USERNAME` 同值，GitHub 会静默丢弃该 output，
+> 下游拿到空串拼出 `:sha-xxx` 这种非法引用，`docker pull` 立即报
+> `invalid reference format`。镜像名一律在需要的作业内用
+> `github.repository_owner` 现场拼装。
+
 > ⚠️ 原先那份 `build-images.yml` 是从别的项目（`fastapi_tuiwen`）拷来的通用模板，
 > 在本项目会**直接失败**：用仓库根 `Dockerfile`（本项目在 `backend/`）、
 > 依赖不存在的 `.github/actions/resolve-image` 与根 `VERSION` 文件、

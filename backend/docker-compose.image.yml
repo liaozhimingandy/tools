@@ -8,8 +8,8 @@
 #   1) cp .env.example .env，填数据库/CORS；再追加一行固定版本：
 #        TOOLS_IMAGE=ghcr.io/liaozhimingandy/tools-backend:sha-<7位commit>
 #      固定 sha 而不是 latest，回滚与审计才有意义（标签见 Actions 构建报告）。
-#   2) 登录 GHCR：docker login ghcr.io -u <github-user> -p <PAT:read:packages>
-#      （公开仓库若把 package 设为 public，可跳过登录）
+#   2) GHCR：本仓库 package 已实测可匿名 `docker pull`，通常无需登录；
+#      若改为私有再执行 docker login ghcr.io -u <github-user> -p <PAT:read:packages>
 #   3) docker compose -f docker-compose.image.yml up -d
 #      init-db 幂等执行 001 建表；api 在其成功后启动。
 #   4) docker compose -f docker-compose.image.yml logs -f api

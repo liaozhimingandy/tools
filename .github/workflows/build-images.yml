@@ -199,8 +199,6 @@ jobs:
     needs: meta
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    outputs:
-      ghcr_image: ${{ steps.tags.outputs.ghcr_image }}
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -345,9 +343,16 @@ jobs:
 
       - name: 校验镜像内容与 /v1 接口
         env:
-          REF: ${{ needs.build.outputs.ghcr_image }}:sha-${{ needs.meta.outputs.short_sha }}
+          OWNER: ${{ github.repository_owner }}
+          SHORT_SHA: ${{ needs.meta.outputs.short_sha }}
         run: |
           set -euo pipefail
+          # 镜像名必须在本作业现场拼：GitHub 会静默丢弃「值里疑似含 secret」的
+          # job output。owner 常与 DOCKERHUB_USERNAME 同值，跨 job 传会得到空串，
+          # 使 REF 退化成 ":sha-xxx"，docker pull 立即报 invalid reference format。
+          OWNER_LC="$(printf '%s' "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          REF="ghcr.io/${OWNER_LC}/${IMAGE_NAME}:sha-${SHORT_SHA}"
+          echo "校验镜像引用：${REF}"
           docker pull "${REF}"
 
           # 镜像内文件布局按 backend/Dockerfile：app/、sql/、requirements.txt
@@ -381,7 +386,7 @@ jobs:
           VERSION: ${{ needs.meta.outputs.version }}
           APP_VERSION: ${{ needs.meta.outputs.app_version }}
           SHORT_SHA: ${{ needs.meta.outputs.short_sha }}
-          GHCR_IMAGE: ${{ needs.build.outputs.ghcr_image }}
+          OWNER: ${{ github.repository_owner }}
           PUSH_HUB: ${{ needs.meta.outputs.push_hub }}
           PUSH_ACR: ${{ needs.meta.outputs.push_acr }}
           R_META: ${{ needs.meta.result }}
@@ -389,6 +394,9 @@ jobs:
           R_VERIFY: ${{ needs.verify.result }}
         run: |
           set -euo pipefail
+          # 同 verify：镜像名现场拼，绝不跨 job 传（含 secret 子串的 output 会被丢弃）
+          OWNER_LC="$(printf '%s' "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          GHCR_IMAGE="ghcr.io/${OWNER_LC}/${IMAGE_NAME}"
           {
             echo "## 后端镜像构建报告"
             echo ""
@@ -410,7 +418,8 @@ jobs:
             echo "> 部署建议固定 \`sha-<commit>\` 或具体版本，不要长期依赖 \`latest\`。"
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # 报告作业始终产出摘要；失败信号由 meta/build/verify 自身给出，
+          # 这里再 exit 1 只会多一个噪音，还会掩盖已写好的摘要。
           if [ "${R_META}" = "failure" ] || [ "${R_BUILD}" = "failure" ] || [ "${R_VERIFY}" = "failure" ]; then
-            echo "::error title=后端镜像构建失败::请查看 meta / build / verify 作业日志"
-            exit 1
+            echo "::warning title=后端镜像流程有失败作业::meta=${R_META} build=${R_BUILD} verify=${R_VERIFY}"
           fi
