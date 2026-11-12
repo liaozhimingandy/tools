@@ -1,0 +1,39 @@
+/**
+ * TDesign Vue Next 品牌主题覆盖。
+ *
+ * 只覆盖品牌色令牌，不动组件结构样式。主色 #027AFF（HSL 211.5 / 100% / 50.4%），
+ * 按固定色相 + 明度梯度推导 10 级色阶（第 7 级即主色，与 TDesign 默认约定一致）。
+ *
+ * 关键点：本文件在 `tdesign-vue-next/es/style/index.css` 之后 import，
+ * :root 同名变量后定义覆盖先定义；且本文件规则未分层，优先级高于 Tailwind 的层内样式。
+ */
+:root {
+  /* ---- 品牌色 10 级（浅 -> 深）---- */
+  --td-brand-color-1: #f0f7fe;
+  --td-brand-color-2: #e1effe;
+  --td-brand-color-3: #c2dfff;
+  --td-brand-color-4: #94c7ff;
+  --td-brand-color-5: #5ca9ff;
+  --td-brand-color-6: #298eff;
+  --td-brand-color-7: #027aff; /* 主色 */
+  --td-brand-color-8: #006ae0;
+  --td-brand-color-9: #0455af;
+  --td-brand-color-10: #053f7f;
+
+  /* ---- 品牌语义色 ---- */
+  --td-brand-color: #027aff;
+  --td-brand-color-hover: #006ae0;
+  --td-brand-color-active: #005abd;
+  --td-brand-color-light: #e1effe;
+  --td-brand-color-light-hover: #c3dffd;
+  --td-brand-color-focus: rgba(2, 122, 255, 0.2);
+  --td-brand-color-disabled: #b3cbe6;
+
+  /* ---- 品牌文字 / 链接（官方默认指向旧蓝 brand-color-7/8，需显式覆盖）---- */
+  --td-text-color-brand: #027aff;
+  --td-text-color-link: #006ae0;
+
+  /* ---- 字体：补中文 optimised 栈 ---- */
+  --td-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+}

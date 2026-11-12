@@ -1,0 +1,9 @@
+# 后端依赖（精确版本，Python 3.14 + Windows wheel 已验证）
+# 新增依赖须遵循 ai-engineering-standards 规范并经授权。
+fastapi==0.162.4
+uvicorn==0.54.0
+# 公共配置表（PostgreSQL 后端，可选：TOOLS_STORE=postgres 时才连接）
+psycopg[binary,pool]==3.3.8
+# Logto 统一认证预留（JWT 校验，可选：TOOLS_AUTH_MODE=logto 时才加载）
+PyJWT==2.15.1
+cryptography==50.0.2

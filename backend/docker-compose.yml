@@ -1,0 +1,52 @@
+# tools 后端云主机部署（外部托管 PostgreSQL，容器只跑 API）。
+# 用法：
+#   1) cp .env.example .env  并填入真实数据库口令等；
+#   2) docker compose up -d --build
+#      init-db 会先幂等执行 sql/001~003 建表，成功后 api 才启动。
+#   3) docker compose logs -f api 观察启动；/api/health 做健康检查。
+#
+# 数据库在云厂商托管（TOOLS_PG_HOST:TOOLS_PG_PORT，6432 通常是 PgBouncer 连接池端口），
+# 不在本 compose 里再起一个 postgres，避免双写与端口冲突。
+
+services:
+  # 一次性初始化：幂等建 tools / tool_configs 两表 + 行级安全 + 应用角色 + 老库迁移。
+  # 通过 PGPASSWORD 传口令，绕开密码含 '@' 的 DSN 解析问题。
+  # 不设 ON_ERROR_STOP：重复执行 / 托管库禁建角色等可容忍错误不应阻断部署；
+  # 部署后请 `docker compose logs init-db` 核对有无真实报错。
+  init-db:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGHOST: ${TOOLS_PG_HOST}
+      PGPORT: ${TOOLS_PG_PORT:-6432}
+      PGUSER: ${TOOLS_PG_USER}
+      PGPASSWORD: ${TOOLS_PG_PASSWORD}
+      PGDATABASE: ${TOOLS_PG_NAME}
+    volumes:
+      - ./sql:/sql:ro
+    command: >
+      sh -c 'for f in /sql/001_tool_configs.sql /sql/002_app_role.sql /sql/003_migration.sql; do
+        echo "== applying $$f ==";
+        psql -f "$$f" || echo "!! $$f had errors (see above)";
+      done'
+
+  # API 服务：FastAPI + uvicorn，容器内监听 0.0.0.0:$TOOLS_PORT
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      # 覆盖镜像内默认，强制容器对外监听
+      TOOLS_HOST: 0.0.0.0
+      TOOLS_PORT: ${TOOLS_PORT:-8080}
+    ports:
+      - "${TOOLS_PORT:-8080}:${TOOLS_PORT:-8080}"
+    read_only: true
+    tmpfs:
+      - /tmp

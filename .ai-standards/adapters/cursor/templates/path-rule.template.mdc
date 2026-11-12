@@ -1,0 +1,42 @@
+---
+description: "技术栈级规范示例：仅当处理对应 glob 匹配的文件时附加。用于演示如何把 standards/ 按需映射为 Cursor 路径规则。"
+globs: "**/*.py, **/*.ts, **/*.js, **/*.vue"
+alwaysApply: false
+---
+
+<!--
+  模板用途：演示"技术栈级规则"如何映射到 Cursor Project Rule。
+  - 这是示例模板，不是安装产物；正式安装的只有 alwaysApply: true 的通用红线规则。
+  - 官方依据：https://cursor.com/docs/rules （[A]，查阅 2026-11-11）
+  - frontmatter 三字段交互：alwaysApply=false + globs 提供 => 匹配文件进入上下文时自动附加。
+  - 文件名请用 .mdc 后缀；.cursor/rules/ 下的 .md 会被忽略。
+  - 不要把下方索引换成规范正文全文；官方最佳实践是"引用文件而非复制内容"。
+-->
+
+# 技术栈规范 · 按需加载
+
+当正在处理的文件匹配本规则 `globs` 时，按语言读取对应技术规范（位于只读镜像 `.ai-standards/`），
+不要凭记忆假设框架 API 或项目约定。
+
+## Python
+
+| 场景 | 读取 |
+| --- | --- |
+| 通用编码 / 命名 | `.ai-standards/standards/languages/python.md` |
+| API 设计 | `.ai-standards/standards/backend/api.md` |
+| 数据库 | `.ai-standards/standards/backend/database.md` |
+| 认证授权 | `.ai-standards/standards/backend/authentication.md` |
+
+## TypeScript / JavaScript / Vue
+
+| 场景 | 读取 |
+| --- | --- |
+| 语言约定 | `.ai-standards/standards/languages/typescript.md`、`javascript.md` |
+| 前端组件 | `.ai-standards/standards/frontend/component.md` |
+| UI / 样式 | `.ai-standards/standards/frontend/ui.md` |
+| Vue 专属 | `.ai-standards/standards/frontend/vue.md` |
+
+## 红线仍适用
+
+本规则只补充技术栈细则；通用红线以 `alwaysApply: true` 的 `ai-engineering-standards.mdc`
+及 `.ai-standards/core/ai-behavior.md` 为准，两者不冲突、不互相替代。

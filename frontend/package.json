@@ -1,0 +1,32 @@
+{
+  "name": "tools-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "tools 空间前端：Vue 3 + TypeScript + TDesign Vue Next + Tailwind CSS v4 + Vite，门户路由到各单页面工具。",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit -p tsconfig.app.json && vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json",
+    "test": "node --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@logto/browser": "3.1.2",
+    "tdesign-icons-vue-next": "0.4.12",
+    "tdesign-vue-next": "1.20.11",
+    "vue": "3.5.45",
+    "vue-router": "4.5.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.5",
+    "@types/node": "22.15.3",
+    "@vitejs/plugin-vue": "6.0.10",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "vue-tsc": "3.3.14"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

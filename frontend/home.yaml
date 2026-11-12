@@ -1,0 +1,20 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]: tools · 工具集
+    - generic [ref=e5]: Vue 3 · FastAPI
+  - generic [ref=e6]:
+    - heading "我的工具集" [level=1] [ref=e7]
+    - paragraph [ref=e8]: 平时开发的单页面小工具，统一从这里进入。每个工具独立运行、互不依赖；规范性约束由 ai-engineering-standards 统一提供。
+  - link "锦囊 SafeKeep 本地零知识密码库。浏览器内 AES-256-GCM 加密，主密码与恢复码双钥匙解锁，纯密文本地存储与加密备份。 零知识 本地存储 Web Crypto" [ref=e10] [cursor=pointer]:
+    - /url: /safekeep
+    - generic [ref=e11]:
+      - generic [aria-hidden] [ref=e12]: 🔐
+      - generic [ref=e13]:
+        - generic [ref=e14]: 锦囊
+        - generic [ref=e15]: SafeKeep
+    - generic [ref=e16]: 本地零知识密码库。浏览器内 AES-256-GCM 加密，主密码与恢复码双钥匙解锁，纯密文本地存储与加密备份。
+    - generic [ref=e17]:
+      - generic [ref=e18]: 零知识
+      - generic [ref=e19]: 本地存储
+      - generic [ref=e20]: Web Crypto
+  - contentinfo [ref=e21]: 工程规范来源：ai-engineering-standards · 新增工具请在 src/router 与 HomeView 同步登记。

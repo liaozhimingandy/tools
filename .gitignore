@@ -1,0 +1,37 @@
+# OS generated
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python (仅当某个工具附带辅助脚本时)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node (仅当某个工具后续确实需要时)
+node_modules/
+dist/
+build/
+
+# 部署凭据：含数据库真实口令，绝不入库；仅 .env.example 模板可提交
+.env
+.env.*
+!.env.example
+
+# Logs / temp
+*.log
+.tmp/
+
+# 本项目：后端本地依赖目录 + Vite/TypeScript 增量缓存 + 浏览器测试产物
+backend/.deps/
+frontend/node_modules/.tmp/
+frontend/.playwright-cli/
+*.tsbuildinfo

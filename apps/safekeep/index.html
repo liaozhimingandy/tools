@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f6e56'/%3E%3Cpath d='M11 14v-2a5 5 0 0 1 10 0v2' fill='none' stroke='%23ffffff' stroke-width='2.4'/%3E%3Crect x='8.5' y='14' width='15' height='11' rx='2.5' fill='%23ffffff'/%3E%3C/svg%3E">
+<title>锦囊 SafeKeep · 本地密码库 MVP</title>
+<style>
+  :root{--bg:#faf9f6;--card:#fff;--ink:#20211e;--ink2:#5c5f58;--ink3:#8a8d84;--line:#e4e2da;--accent:#0f6e56;--accent-bg:#e1f5ee;--warn:#a32d2d;--warn-bg:#fcebeb;--amber:#854f0b;--amber-bg:#faeeda;--blue:#185fa5;--blue-bg:#e6f1fb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:7px;padding:7px 12px;font-size:13px}
+  button:hover{border-color:#b9b6aa;background:#fbfaf7}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{background:#0c5a47}
+  button.danger{color:var(--warn);border-color:#eecccc}
+  button.ghost{border-color:transparent;background:transparent;color:var(--ink2);padding:5px 8px}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  input,select,textarea{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:8px 10px;background:#fff;color:var(--ink);width:100%}
+  input:focus,select:focus,textarea:focus{outline:2px solid #9fe1cb;outline-offset:0;border-color:var(--accent)}
+  input[type=checkbox],input[type=range]{width:auto}
+  label{display:block;font-size:12.5px;color:var(--ink2);margin:12px 0 5px}
+  code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .topbar{height:56px;border-bottom:1px solid var(--line);background:#fff;display:flex;align-items:center;gap:12px;padding:0 20px;position:sticky;top:0;z-index:20}
+  .brand{font-weight:600;font-size:16px;letter-spacing:-.01em;white-space:nowrap}
+  .brand span{color:var(--accent)}
+  .mode{font-size:11px;padding:2px 8px;border-radius:5px;background:var(--blue-bg);color:var(--blue);white-space:nowrap}
+  .sp{flex:1}
+  .pill{font-size:11.5px;padding:3px 9px;border-radius:20px;background:var(--accent-bg);color:var(--accent);white-space:nowrap}
+  .pill.off{background:#f1efe8;color:var(--ink2)}
+  .cd{font-size:11.5px;color:var(--ink3);font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .app{max-width:1180px;margin:0 auto;padding:24px 20px 80px}
+  .screen{display:none}
+  .screen.on{display:block}
+  .center{max-width:460px;margin:44px auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px}
+  .center h1{font-size:21px;margin:0 0 6px;font-weight:600}
+  .center .desc{color:var(--ink2);font-size:13px;margin:0 0 18px}
+  .btnrow{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+  .btnrow button{flex:1;min-width:110px}
+  .hint{font-size:12px;color:var(--ink3);line-height:1.65;margin-top:10px}
+  .strength{height:5px;border-radius:3px;background:#eeece5;overflow:hidden;margin-top:8px}
+  .strength i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+  .note{background:var(--amber-bg);color:#6b4310;border-radius:8px;padding:9px 12px;font-size:12px;line-height:1.65;margin:12px 0}
+  .ok{background:var(--accent-bg);color:var(--accent);border-radius:8px;padding:9px 12px;font-size:12.5px;margin:12px 0}
+  .no{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:9px 12px;font-size:12.5px;margin:12px 0}
+  .recovery{font-family:ui-monospace,Consolas,monospace;font-size:17px;letter-spacing:.06em;background:#f7f6f1;border:1px dashed #c9c5b8;border-radius:9px;padding:14px;text-align:center;word-break:break-all;margin:14px 0}
+  .banner{background:var(--amber-bg);color:#6b4310;border-radius:9px;padding:10px 14px;font-size:12.5px;margin-bottom:16px;display:flex;gap:10px;align-items:center}
+  .banner button{margin-left:auto;flex:none}
+  .vault-layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:20px}
+  @media(max-width:760px){.vault-layout{grid-template-columns:1fr}.side{display:flex;flex-wrap:wrap;gap:6px}.side .group{display:none}.side button{padding:5px 9px;font-size:12px}.topbar .cd{display:none}}
+  .side{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;align-self:start;position:sticky;top:74px}
+  .side-title{font-size:11px;color:var(--ink3);letter-spacing:.06em;margin:14px 0 6px;padding:0 6px}
+  .side button{display:flex;width:100%;border:0;background:transparent;text-align:left;padding:7px 9px;border-radius:7px;color:var(--ink2);font-size:12.5px;align-items:center;gap:6px}
+  .side button:hover{background:#f7f6f1}
+  .side button.on{background:var(--accent-bg);color:var(--accent);font-weight:600}
+  .side button i{font-style:normal;margin-left:auto;font-size:11px;opacity:.7}
+  .side .sep{height:1px;background:var(--line);margin:10px 4px}
+  .main{min-width:0}
+  .toolbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .toolbar input{flex:1;min-width:160px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--ink2);cursor:pointer}
+  .chip.on{background:var(--accent-bg);border-color:#9fe1cb;color:var(--accent)}
+  .item{border:1px solid var(--line);border-radius:10px;padding:13px 14px;margin-bottom:10px;background:#fff}
+  .item.deleted{opacity:.62;background:#faf9f6}
+  .item-head{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .item-head b{font-size:14px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .badge{font-size:11px;padding:2px 7px;border-radius:5px;background:var(--blue-bg);color:var(--blue);flex:none}
+  .star{border:0;background:none;color:#c8a63a;font-size:15px;padding:0 2px;cursor:pointer}
+  .row{display:flex;gap:8px;align-items:center;font-size:12.5px;margin:5px 0;min-height:24px}
+  .row .k{width:44px;color:var(--ink3);flex:none}
+  .row .v{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .row .acts{display:flex;gap:4px;flex:none}
+  .row button{padding:2px 8px;font-size:11.5px}
+  .item-foot{display:flex;gap:6px;margin-top:10px;padding-top:9px;border-top:1px solid #f2f0ea;align-items:center}
+  .item-foot .ts{font-size:11px;color:var(--ink3);margin-left:auto}
+  .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+  .tag{font-size:11px;padding:1px 7px;border-radius:4px;background:#f1efe8;color:var(--ink2)}
+  .empty{text-align:center;padding:40px 12px;color:var(--ink3);font-size:13px;background:#fff;border:1px dashed var(--line);border-radius:10px}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .metric{background:#f7f6f1;border-radius:9px;padding:11px 12px}
+  .metric .n{font-size:21px;font-weight:600;line-height:1.2;font-variant-numeric:tabular-nums}
+  .metric .l{font-size:11.5px;color:var(--ink2);margin-top:2px}
+  .kv{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid #f2f0ea;gap:12px}
+  .kv span:first-child{color:var(--ink2);flex:none}
+  .kv span:last-child{text-align:right;word-break:break-all}
+  .genrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+  .genrow label{margin:0;font-size:12px;display:flex;gap:5px;align-items:center;color:var(--ink2);white-space:nowrap}
+  .genrow input[type=range]{width:130px;padding:0;border:0;accent-color:var(--accent)}
+  .genout{font-family:ui-monospace,Consolas,monospace;font-size:15px;background:#f7f6f1;border-radius:7px;padding:11px 12px;word-break:break-all;min-height:40px;margin:10px 0}
+  .cipher{background:#f7f6f1;border:1px solid #eceae2;border-radius:8px;padding:9px 11px;margin-bottom:7px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.6;word-break:break-all}
+  .cipher .ck{color:var(--ink3)}
+  .cipher .ct{color:var(--blue)}
+  .verify{display:flex;gap:6px;margin:12px 0}
+  .verify input{flex:1}
+  .modal-bg{position:fixed;inset:0;background:rgba(30,32,28,.34);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal-bg.on{display:flex}
+  .modal{background:#fff;border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:88vh;overflow:auto}
+  .modal.wide{max-width:620px}
+  .modal h3{font-size:17px;margin:0 0 4px;font-weight:600}
+  .modal .mdesc{font-size:12.5px;color:var(--ink2);margin:0 0 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#262824;color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;opacity:0;transition:.22s;pointer-events:none;z-index:80;max-width:88vw;text-align:center}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .busy{position:fixed;inset:0;background:rgba(250,249,246,.86);display:none;align-items:center;justify-content:center;z-index:90;font-size:14px;color:var(--ink2)}
+  .busy.on{display:flex}
+  .switch{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2);cursor:pointer;margin:9px 0}
+  .switch input{width:auto}
+  ul.tight{padding-left:18px;font-size:12.5px;color:var(--ink2);line-height:1.85;margin:8px 0}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">锦<span>囊</span></div>
+  <span class="mode" id="modeTag">仅本地 · 不上传</span>
+  <div class="sp"></div>
+  <span class="cd" id="countdown"></span>
+  <span class="pill off" id="statusPill">未初始化</span>
+  <button class="ghost" id="btnLockTop" style="display:none">锁定</button>
+</div>
+
+<div class="app">
+
+  <!-- 首次使用：创建本地保险库 -->
+  <section class="screen on" id="s-welcome">
+    <div class="center">
+      <h1>创建本地保险库</h1>
+      <p class="desc">免注册、免登录。所有条目在这台设备上加密后写入浏览器本地存储，不会上传到任何服务器。</p>
+      <label>主密码（解锁的唯一钥匙）</label>
+      <input type="password" id="newPw" autocomplete="new-password" placeholder="至少 10 位，建议用一句长口令">
+      <div class="strength"><i id="pwBar"></i></div>
+      <div class="hint" id="pwHint">主密码不落盘、不可找回。忘记后只能用恢复码救回数据。</div>
+      <label>确认主密码</label>
+      <input type="password" id="newPw2" autocomplete="new-password">
+      <div class="note">下一步会给你一组<b>恢复码</b>，请抄写在纸上。它和主密码是两把独立的钥匙，任何一把都能解开保险库。</div>
+      <div class="btnrow">
+        <button class="primary" id="btnCreate">创建保险库</button>
+        <button id="btnImportWelcome">从备份恢复</button>
+      </div>
+      <div class="hint">本版本为本地 MVP：数据只保存在当前浏览器。清理浏览器数据、换设备或换浏览器都会丢失，请定期用「备份与恢复」导出加密备份文件。</div>
+    </div>
+  </section>
+
+  <!-- 恢复码确认（确认抄写后才落盘，避免刷新留下死库） -->
+  <section class="screen" id="s-recovery">
+    <div class="center">
+      <h1>抄写恢复码</h1>
+      <p class="desc">这是忘记主密码时唯一的后路。它只显示这一次，请现在抄到纸上并妥善保管。</p>
+      <div class="recovery" id="recoveryCode"></div>
+      <div class="note" id="recoveryNote">尚未写入磁盘：确认抄写之前刷新页面，不会留下一个解不开的空库。</div>
+      <label>输入恢复码以确认（忽略连字符，O 按 0、I/L 按 1 处理）</label>
+      <input id="recoveryConfirm" class="mono" autocomplete="off" spellcheck="false">
+      <div class="btnrow"><button class="primary" id="btnConfirmRecovery">我已抄写，启用保险库</button></div>
+    </div>
+  </section>
+
+  <!-- 锁定 / 解锁 -->
+  <section class="screen" id="s-locked">
+    <div class="center">
+      <h1>解锁保险库</h1>
+      <p class="desc" id="lockedHint">数据仍以密文形式保存在本机，输入主密码后才会解密。</p>
+      <div id="unlockByPw">
+        <label>主密码</label>
+        <input type="password" id="unlockPw" autocomplete="current-password">
+        <div class="btnrow"><button class="primary" id="btnUnlock">解锁</button></div>
+        <div class="hint"><a href="#" id="lnkRecovery">忘记主密码？用恢复码解锁</a></div>
+      </div>
+      <div id="unlockByCode" style="display:none">
+        <label>恢复码</label>
+        <input id="unlockCode" class="mono" autocomplete="off" spellcheck="false">
+        <div class="btnrow"><button class="primary" id="btnUnlockCode">用恢复码解锁</button><button id="btnBackPw">返回</button></div>
+      </div>
+      <div class="no" id="failHint" style="display:none"></div>
+      <div class="hint">连续输错会增加等待时间。本地模式没有服务端限流，真正抵御离线爆破靠的是主密码强度与 PBKDF2 600k 迭代。</div>
+      <div class="sep" style="height:1px;background:var(--line);margin:18px 0"></div>
+      <button class="ghost" id="btnImportLocked" style="width:100%">从加密备份文件恢复</button>
+    </div>
+  </section>
+
+  <!-- 主界面 -->
+  <section class="screen" id="s-vault">
+    <div class="banner" id="backupBanner" style="display:none">
+      <span id="backupBannerText"></span>
+      <button id="btnBannerBackup">立即导出备份</button>
+    </div>
+    <div class="vault-layout">
+      <aside class="side">
+        <div class="group"><div class="side-title">条目</div></div>
+        <button data-view="all" class="on">全部条目 <i id="cntAll">0</i></button>
+        <button data-view="fav">收藏 <i id="cntFav">0</i></button>
+        <button data-view="trash">回收站 <i id="cntTrash">0</i></button>
+        <div class="group"><div class="sep"></div><div class="side-title">类型</div></div>
+        <div class="group" id="typeNav"></div>
+        <div class="group"><div class="sep"></div><div class="side-title">标签</div></div>
+        <div class="group" id="tagNav"></div>
+        <div class="group"><div class="sep"></div><div class="side-title">工具与数据</div></div>
+        <button data-open="generator">密码生成器</button>
+        <button data-open="health">安全体检</button>
+        <button data-open="backup">备份与恢复</button>
+        <button data-open="settings">设置</button>
+        <button data-open="account">账号中心（云端同步）</button>
+        <button data-open="storage">本地存储自检</button>
+      </aside>
+      <main class="main">
+        <div class="toolbar">
+          <input id="search" placeholder="搜索标题、账号、网址、标签…" autocomplete="off">
+          <button class="primary" id="btnAdd">+ 新增条目</button>
+        </div>
+        <div class="chips" id="tagChips"></div>
+        <div id="itemList"></div>
+      </main>
+    </div>
+  </section>
+
+</div>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+<div class="busy" id="busy">正在加密 / 解密…</div>
+<input type="file" id="fileInput" accept=".json,application/json" style="display:none">
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================================
+ * @vault/crypto —— 可移植加密核心（零依赖、零 DOM、零网络）
+ * 仅依赖：crypto.getRandomValues、crypto.subtle、btoa/atob、TextEncoder/Decoder
+ * 移植到小程序时只需替换本段内部实现为 @noble/hashes + @noble/ciphers，
+ * 密文格式（{iv,ct} base64、AES-256-GCM、PBKDF2-SHA256 600k）保持不变。
+ * ========================================================================= */
+var VC = (function(){
+  var ITER = 600000;
+  var ENC = new TextEncoder(), DEC = new TextDecoder();
+  function rnd(n){ return globalThis.crypto.getRandomValues(new Uint8Array(n)); }
+  function now(){ return Date.now(); }
+  function hex(u){ return Array.from(u, function(b){ return b.toString(16).padStart(2,'0'); }).join(''); }
+  function b64(u){ var s=''; for(var i=0;i<u.length;i++) s+=String.fromCharCode(u[i]); return globalThis.btoa(s); }
+  function unb64(x){ var s=globalThis.atob(x), u=new Uint8Array(s.length); for(var i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+  function uuid(){ var b=rnd(16); b[6]=(b[6]&15)|64; b[8]=(b[8]&63)|128; var h=hex(b); return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20); }
+
+  async function derive(secret, salt){
+    var km = await globalThis.crypto.subtle.importKey('raw', ENC.encode(secret), 'PBKDF2', false, ['deriveBits']);
+    var bits = await globalThis.crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:salt,iterations:ITER}, km, 256);
+    return new Uint8Array(bits);
+  }
+  async function importAes(keyBytes){
+    return globalThis.crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt','decrypt']);
+  }
+  async function seal(keyBytes, data){
+    var iv = rnd(12), k = await importAes(keyBytes);
+    var buf = await globalThis.crypto.subtle.encrypt({name:'AES-GCM',iv:iv,tagLength:128}, k, data);
+    return { iv:b64(iv), ct:b64(new Uint8Array(buf)) };
+  }
+  async function unseal(keyBytes, rec){
+    var k = await importAes(keyBytes);
+    var buf = await globalThis.crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(rec.iv),tagLength:128}, k, unb64(rec.ct));
+    return new Uint8Array(buf);
+  }
+  async function encryptJSON(vk, obj){ return seal(vk, ENC.encode(JSON.stringify(obj))); }
+  async function decryptJSON(vk, rec){ return JSON.parse(DEC.decode(await unseal(vk, rec))); }
+
+  // Crockford Base32：去掉易混淆的 I/L/O/U，用户抄写不易错
+  var CROCK = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  function genRecovery(){
+    var b = rnd(20), out='', acc=0, bits=0;
+    for(var i=0;i<b.length;i++){
+      acc=(acc<<8)|b[i]; bits+=8;
+      while(bits>=5){ bits-=5; out+=CROCK[(acc>>bits)&31]; }
+      acc &= (1<<bits)-1;
+    }
+    return out.match(/.{1,4}/g).join('-');
+  }
+  function normCode(s){ return String(s||'').toUpperCase().replace(/O/g,'0').replace(/[IL]/g,'1').replace(/[^0-9A-Z]/g,''); }
+
+  // 创建保险库：vaultKey 随机生成，由主密码与恢复码各包裹一份，永不以明文落盘
+  async function makeVault(masterPassword){
+    var salt=rnd(16), rSalt=rnd(16), vk=rnd(32);
+    var kek=await derive(masterPassword, salt);
+    var wrapped=await seal(kek, vk);
+    var code=genRecovery();
+    var rkek=await derive(normCode(code), rSalt);
+    var rwrapped=await seal(rkek, vk);
+    var account={
+      v:1, app:'safekeep-local', mode:'local', createdAt:now(),
+      salt:b64(salt), kdf:{alg:'PBKDF2-SHA256',iterations:ITER},
+      wrapped:wrapped,
+      recovery:{salt:b64(rSalt),iv:rwrapped.iv,ct:rwrapped.ct},
+      lastBackupAt:null
+    };
+    return { account:account, recoveryCode:code, vk:vk };
+  }
+  async function unwrap(secret, account, useRecovery){
+    var salt = unb64(useRecovery ? account.recovery.salt : account.salt);
+    var material = useRecovery ? normCode(secret) : secret;
+    var kek = await derive(material, salt);
+    var rec = useRecovery ? {iv:account.recovery.iv, ct:account.recovery.ct} : account.wrapped;
+    var vk = await unseal(kek, rec);
+    if(vk.length!==32) throw new Error('vaultKey 长度异常');
+    return vk;
+  }
+  // 改主密码：只重新包裹同一把 vaultKey，所有条目密文原样不动
+  async function rewrap(vk, newPassword){
+    var salt=rnd(16), kek=await derive(newPassword, salt);
+    return { salt:b64(salt), wrapped:await seal(kek, vk) };
+  }
+  async function refreshRecovery(vk){
+    var code=genRecovery(), rSalt=rnd(16);
+    var rkek=await derive(normCode(code), rSalt);
+    var rwrapped=await seal(rkek, vk);
+    return { code:code, recovery:{salt:b64(rSalt), iv:rwrapped.iv, ct:rwrapped.ct} };
+  }
+
+  var WORDS = ('amber anchor apple arbor atlas aurora autumn beacon berry birch bloom brass breeze brook cedar cherry cliff cloud coast coral cove dawn delta drift dune eagle ember fable falcon fern field flame flora frost garden glade harbor haze heron hill ivory jade juniper lagoon lantern leaf lunar maple meadow mist moss nebula north oak ocean olive orbit orchid pebble pine plume quartz rain raven reef river robin ruby sage shore silver slate snow solar spruce stone storm summit thorn tide timber valley velvet violet willow winter').split(' ');
+  // 拒绝采样，避免取模偏置；返回真实熵值，不虚标强度
+  function genPassword(opts){
+    opts = opts || {};
+    if(opts.phrase){
+      var n = Math.max(3, Math.min(10, opts.length||6));
+      var buf = rnd(n*2), out=[];
+      for(var i=0;i<n;i++) out.push(WORDS[buf[i] % WORDS.length]);
+      var suffix = opts.digits ? (rnd(1)[0]%100).toString().padStart(2,'0') : '';
+      return { value:out.join('-')+(suffix?'-'+suffix:''), entropy:Math.round(n*Math.log2(WORDS.length)+(suffix?6.6:0)), charset:WORDS.length };
+    }
+    var len = Math.max(6, Math.min(64, opts.length||20)), sets=[];
+    if(opts.upper!==false) sets.push('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    if(opts.lower!==false) sets.push('abcdefghijklmnopqrstuvwxyz');
+    if(opts.digits!==false) sets.push('0123456789');
+    if(opts.symbols!==false) sets.push('!@#$%^&*()-_=+[]{};:,.?');
+    var chars=sets.join('');
+    if(opts.exclude) chars=chars.replace(/[1lI0OoS5Z2]/g,'');
+    if(!chars.length) chars='abcdefghijklmnopqrstuvwxyz';
+    if(chars.length>256) chars=chars.slice(0,256);
+    var lim=Math.floor(256/chars.length)*chars.length, str='', buf2=rnd(len*3), bi=0;
+    while(str.length<len){
+      if(bi>=buf2.length){ buf2=rnd(len*3); bi=0; }
+      var b=buf2[bi++];
+      if(b>=lim) continue;
+      str+=chars[b%chars.length];
+    }
+    return { value:str, entropy:Math.round(len*Math.log2(chars.length)), charset:chars.length };
+  }
+
+  // 纯判据：绝对时间戳，不累计计时（后台定时器会被节流）
+  function shouldLock(nowTs, lastActivityTs, idleMs, hidden){
+    if(hidden) return true;
+    if(!idleMs) return false;
+    return nowTs - lastActivityTs >= idleMs;
+  }
+
+  function health(list){
+    var live=list.filter(function(p){ return !p._deleted; });
+    var withPw=live.filter(function(p){ return p.fields && p.fields.password; });
+    var weakItems=withPw.filter(function(p){ return String(p.fields.password).length<12; });
+    var counts={}; withPw.forEach(function(p){ var k=p.fields.password; counts[k]=(counts[k]||0)+1; });
+    var reuseItems=withPw.filter(function(p){ return counts[p.fields.password]>1; });
+    var cutoff=now()-180*86400000;
+    var oldItems=withPw.filter(function(p){ return (p.updatedAt||0)<cutoff; });
+    var score=Math.max(0,100-weakItems.length*8-reuseItems.length*6-oldItems.length*3);
+    return { total:live.length, withPw:withPw.length, weak:weakItems.length, reused:reuseItems.length,
+             old:oldItems.length, score:score, weakItems:weakItems, reuseItems:reuseItems, oldItems:oldItems };
+  }
+
+  function buildBackup(account, items, rev){
+    return JSON.stringify({ app:'safekeep-backup', v:1, exportedAt:now(), account:account, rev:rev||0, items:items }, null, 2);
+  }
+  function parseBackup(text){
+    var d;
+    try{ d=JSON.parse(text); }catch(e){ throw new Error('文件不是有效的 JSON'); }
+    if(!d || d.app!=='safekeep-backup' || !d.account || d.account.app!=='safekeep-local' || !d.items) throw new Error('不是锦囊的加密备份文件');
+    if(!d.account.wrapped || !d.account.salt || !d.account.kdf || !d.account.recovery) throw new Error('备份结构损坏或版本不兼容');
+    return d;
+  }
+
+  return { ITER:ITER, rnd:rnd, now:now, hex:hex, b64:b64, unb64:unb64, uuid:uuid,
+           derive:derive, seal:seal, unseal:unseal, encryptJSON:encryptJSON, decryptJSON:decryptJSON,
+           genRecovery:genRecovery, normCode:normCode, makeVault:makeVault, unwrap:unwrap,
+           rewrap:rewrap, refreshRecovery:refreshRecovery, genPassword:genPassword,
+           shouldLock:shouldLock, health:health, buildBackup:buildBackup, parseBackup:parseBackup };
+})();
+
+/* =========================================================================
+ * 应用层：本地持久化 + UI
+ * 存储里只有 wrappedKey、salt、密文、rev、非敏感偏好；明文只在内存中存在。
+ * ========================================================================= */
+var LS = { a:'sk.account', i:'sk.items', r:'sk.rev', p:'sk.prefs' };
+var S = { vk:null, account:null, plain:{}, revealed:{}, filter:'', tag:'', view:'all',
+          pending:null, lastActivity:0, idleMs:300000, hideLock:true, clipSec:15,
+          failCount:0, lastCopied:null, lockTimer:null, useRecovery:false, editor:null };
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._tm); t._tm=setTimeout(function(){ t.classList.remove('on'); },2600); }
+function busy(on){ $('busy').classList.toggle('on',!!on); }
+function show(id){ var all=document.querySelectorAll('.screen'); for(var i=0;i<all.length;i++) all[i].classList.toggle('on', all[i].id===id); }
+function openModal(html,wide){ $('modal').className='modal'+(wide?' wide':''); $('modal').innerHTML=html; $('modalBg').classList.add('on'); }
+function closeModal(){ $('modalBg').classList.remove('on'); $('modal').innerHTML=''; }
+function getAccount(){ try{ return JSON.parse(localStorage.getItem(LS.a)); }catch(e){ return null; } }
+function setAccount(a){ localStorage.setItem(LS.a, JSON.stringify(a)); }
+function getItems(){ try{ return JSON.parse(localStorage.getItem(LS.i))||{}; }catch(e){ return {}; } }
+function setItems(o){ localStorage.setItem(LS.i, JSON.stringify(o)); }
+function curRev(){ return parseInt(localStorage.getItem(LS.r)||'0',10)||0; }
+function setRev(n){ localStorage.setItem(LS.r,String(n)); }
+function nextRev(){ var r=curRev()+1; setRev(r); return r; }
+function getPrefs(){ try{ return JSON.parse(localStorage.getItem(LS.p))||{}; }catch(e){ return {}; } }
+function setPrefs(p){ try{ localStorage.setItem(LS.p, JSON.stringify(p)); }catch(e){} }
+function persistItems(o){
+  try{ setItems(o); return true; }
+  catch(e){ toast('本地空间写入失败：请立即导出备份，并清理浏览器存储'); return false; }
+}
+function touch(){ S.lastActivity=VC.now(); }
+
+function syncChrome(){
+  var unlocked=!!S.vk;
+  $('statusPill').className='pill'+(unlocked?'':' off');
+  $('statusPill').textContent=!S.account?'未初始化':(unlocked?'本地 · 已解锁':'本地 · 已锁定');
+  $('btnLockTop').style.display=unlocked?'inline-block':'none';
+  $('countdown').textContent=unlocked?'':'';
+}
+function fmtTime(ts){ return ts?new Date(ts).toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'从未'; }
+
+/* ---------- 创建 / 恢复码确认 ---------- */
+async function createVault(){
+  var pw=$('newPw').value, pw2=$('newPw2').value;
+  if(pw.length<10){ toast('主密码至少 10 位，建议用一句长口令'); return; }
+  if(pw!==pw2){ toast('两次输入不一致'); return; }
+  busy(true);
+  try{
+    var made=await VC.makeVault(pw);
+    S.pending=made;                       // 只在内存里；确认抄写前绝不落盘
+    $('recoveryCode').textContent=made.recoveryCode;
+    $('recoveryConfirm').value='';
+    show('s-recovery');
+  }catch(e){ toast('创建失败：'+e.message); }
+  finally{ busy(false); }
+}
+function confirmRecovery(){
+  if(!S.pending) { show('s-welcome'); return; }
+  var input=VC.normCode($('recoveryConfirm').value);
+  if(input!==VC.normCode(S.pending.recoveryCode)){ toast('恢复码不匹配，请重新核对'); return; }
+  var made=S.pending; S.pending=null;
+  setAccount(made.account); persistItems({}); setRev(0);
+  setPrefs({ idleMs:300000, hideLock:true, clipSec:15 });
+  S.account=made.account; S.vk=made.vk; S.plain={}; S.lastActivity=VC.now();
+  render(); show('s-vault'); syncChrome(); startLockTimer();
+  toast('保险库已创建，现在就可以添加条目');
+}
+
+/* ---------- 解锁 / 锁定 ---------- */
+async function decryptAll(){
+  var items=getItems(), plain={}, broken=[];
+  var ids=Object.keys(items);
+  for(var i=0;i<ids.length;i++){
+    var id=ids[i], r=items[id];
+    if(!r || !r.ct) continue;
+    try{
+      var p=await VC.decryptJSON(S.vk,r);
+      p._deleted=!!r.deleted;
+      plain[id]=p;
+    }catch(e){ broken.push(id); }
+  }
+  S.plain=plain;
+  return broken;
+}
+async function unlock(secret, useRecovery){
+  var a=S.account||getAccount(); if(!a) return false;
+  busy(true);
+  try{
+    var vk=await VC.unwrap(secret,a,!!useRecovery);
+    S.vk=vk; S.account=a; S.failCount=0;
+    var broken=await decryptAll();
+    S.lastActivity=VC.now(); S.revealed={};
+    render(); show('s-vault'); syncChrome(); startLockTimer();
+    $('unlockPw').value=''; $('unlockCode').value=''; $('failHint').style.display='none';
+    toast('已解锁 '+Object.keys(S.plain).length+' 条条目'+(broken.length?'，'+broken.length+' 条密文损坏已跳过':''));
+    if(useRecovery){ setTimeout(function(){ openChangePw(true); },400); toast('恢复码解锁成功，请立即设置新的主密码'); }
+    return true;
+  }catch(e){
+    S.vk=null; S.plain={};
+    S.failCount++;
+    var wait=Math.min(30,Math.pow(2,S.failCount-1));
+    $('failHint').style.display='block';
+    $('failHint').textContent=(useRecovery?'恢复码':'主密码')+'不正确（第 '+S.failCount+' 次失败）。请等待 '+wait+' 秒再试；连续失败会持续加长等待。';
+    $('btnUnlock').disabled=$('btnUnlockCode').disabled=true;
+    setTimeout(function(){ $('btnUnlock').disabled=$('btnUnlockCode').disabled=false; },wait*1000);
+    return false;
+  }finally{ busy(false); }
+}
+async function clearClipboardIfOurs(){
+  if(!S.lastCopied) return;
+  var own=S.lastCopied;
+  try{ var c=await navigator.clipboard.readText(); if(c===own) await navigator.clipboard.writeText(''); }catch(e){}
+  if(S.lastCopied===own) S.lastCopied=null;
+}
+function lockVault(reason){
+  S.vk=null; S.plain={}; S.revealed={}; S.filter=''; S.tag=''; S.view='all';
+  // 必须让 clearClipboardIfOurs 读到 lastCopied；提前置空会让清剪贴板逻辑直接 return。
+  clearClipboardIfOurs();
+  stopLockTimer();
+  closeModal();
+  $('search').value=''; $('itemList').innerHTML='<div class="empty">保险库已锁定，输入主密码后重新解密</div>';
+  $('tagChips').innerHTML=''; $('countdown').textContent='';
+  $('unlockPw').value=''; $('unlockCode').value='';
+  $('btnUnlock').disabled=$('btnUnlockCode').disabled=false;
+  $('failHint').style.display='none'; $('failHint').textContent='';
+  show('s-locked'); bootLocked(); syncChrome();
+  if(reason) toast(reason);
+}
+function stopLockTimer(){ if(S.lockTimer){ clearInterval(S.lockTimer); S.lockTimer=null; } }
+function startLockTimer(){
+  stopLockTimer();
+  S.lockTimer=setInterval(function(){
+    if(!S.vk) return;
+    if(VC.shouldLock(VC.now(),S.lastActivity,S.idleMs,S.hideLock&&document.hidden)){ lockVault('空闲超时，已自动锁定'); return; }
+    var left=Math.max(0,S.idleMs-(VC.now()-S.lastActivity));
+    var m=Math.floor(left/60000), s=Math.floor((left%60000)/1000);
+    $('countdown').textContent=S.idleMs?('自动锁定 '+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')):'自动锁定已关闭';
+  },1000);
+}
+function bootLocked(){
+  S.account=getAccount();
+  if(S.account){
+    $('lockedHint').textContent='保险库创建于 '+fmtTime(S.account.createdAt)+'。数据仍以密文保存在本机，输入主密码后才会解密。';
+  }
+}
+
+/* ---------- 条目 CRUD（整条 JSON 一起加密，元数据不外泄） ---------- */
+async function saveItem(p){
+  if(!S.vk){ toast('保险库已锁定'); return; }
+  busy(true);
+  try{
+    var rec=await VC.encryptJSON(S.vk,p);
+    var items=getItems();
+    items[p.id]={ id:p.id, rev:nextRev(), iv:rec.iv, ct:rec.ct, deleted:!!p._deleted };
+    if(!persistItems(items)) return;
+    S.plain[p.id]=p;
+    render();
+    toast('已加密保存到本地');
+  }finally{ busy(false); }
+}
+async function deleteItem(id, purge){
+  var items=getItems(), p=S.plain[id];
+  if(!items[id]) return;
+  if(purge){ delete items[id]; delete S.plain[id]; }
+  else{
+    items[id].deleted=true; items[id].rev=nextRev();
+    if(p){ p._deleted=true; p.updatedAt=VC.now(); var rec=await VC.encryptJSON(S.vk,p); items[id].iv=rec.iv; items[id].ct=rec.ct; }
+  }
+  persistItems(items); render();
+  toast(purge?'已彻底删除':'已移入回收站');
+}
+async function restoreItem(id){
+  var items=getItems(), p=S.plain[id];
+  if(!items[id]) return;
+  items[id].deleted=false; items[id].rev=nextRev();
+  if(p){ p._deleted=false; p.updatedAt=VC.now(); var rec=await VC.encryptJSON(S.vk,p); items[id].iv=rec.iv; items[id].ct=rec.ct; }
+  persistItems(items); render(); toast('已恢复条目');
+}
+async function toggleFav(id){
+  var p=S.plain[id]; if(!p) return;
+  p.favorite=!p.favorite; p.updatedAt=VC.now();
+  await saveItem(p); toast(p.favorite?'已收藏':'已取消收藏');
+}
+function newPlain(){
+  return { id:VC.uuid(), v:1, type:'login', title:'', fields:{username:'',password:'',totp:''},
+           urls:[], note:'', tags:[], favorite:false, createdAt:VC.now(), updatedAt:VC.now(), _deleted:false };
+}
+function openEditor(existing){
+  var p=existing?JSON.parse(JSON.stringify(existing)):newPlain();
+  S.editor=p;
+  var types=[['login','登录'],['note','安全笔记'],['card','银行卡'],['wifi','WiFi'],['apikey','API 密钥']];
+  openModal('<h3>'+(existing?'编辑条目':'新增条目')+'</h3>'+
+    '<p class="mdesc">保存时整条记录（含类型、网址、标签、时间）会一起加密，本地存储里看不到任何明文。</p>'+
+    '<div class="grid2"><div><label>类型</label><select id="eType">'+types.map(function(t){return '<option value="'+t[0]+'"'+(p.type===t[0]?' selected':'')+'>'+t[1]+'</option>';}).join('')+'</select></div>'+
+    '<div><label>收藏</label><label class="switch"><input type="checkbox" id="eFav" '+(p.favorite?'checked':'')+'> 置顶显示</label></div></div>'+
+    '<label>标题 / 站点</label><input id="eTitle" value="'+esc(p.title)+'" placeholder="例如：GitHub">'+
+    '<label>账号</label><input id="eUser" value="'+esc(p.fields.username||'')+'">'+
+    '<label>密码 <button class="ghost" id="eGen" type="button" style="float:right">生成</button><button class="ghost" id="eEye" type="button" style="float:right">显示</button></label>'+
+    '<input type="password" id="ePass" value="'+esc(p.fields.password||'')+'">'+
+    '<label>网址</label><input id="eUrl" value="'+esc((p.urls&&p.urls[0])||'')+'" placeholder="https://">'+
+    '<label>备注</label><textarea id="eNote" rows="2">'+esc(p.note||'')+'</textarea>'+
+    '<label>标签（逗号分隔）</label><input id="eTags" value="'+esc((p.tags||[]).join(', '))+'">'+
+    '<div class="btnrow"><button class="primary" id="eSave">加密保存</button><button id="eCancel">取消</button></div>');
+  $('eEye').onclick=function(){ var i=$('ePass'); i.type=i.type==='password'?'text':'password'; this.textContent=i.type==='password'?'显示':'隐藏'; };
+  $('eGen').onclick=function(){ $('ePass').value=VC.genPassword({length:20,exclude:true}).value; $('ePass').type='text'; toast('已生成 20 位高熵密码'); };
+  $('eCancel').onclick=closeModal;
+  $('eSave').onclick=async function(){
+    p.type=$('eType').value;
+    p.title=$('eTitle').value.trim()||'未命名';
+    p.fields={ username:$('eUser').value, password:$('ePass').value, totp:(p.fields&&p.fields.totp)||'' };
+    p.urls=[$('eUrl').value.trim()].filter(Boolean);
+    p.note=$('eNote').value;
+    p.favorite=$('eFav').checked;
+    p.tags=$('eTags').value.split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
+    p.updatedAt=VC.now();
+    closeModal(); S.editor=null;
+    await saveItem(p);
+  };
+}
+
+var TYPE_NAME={login:'登录',note:'安全笔记',card:'银行卡',wifi:'WiFi',apikey:'API 密钥'};
+function render(){
+  if(!S.vk) return;
+  var all=Object.keys(S.plain).map(function(k){ return S.plain[k]; });
+  var live=all.filter(function(p){ return !p._deleted; });
+  var trash=all.filter(function(p){ return p._deleted; });
+  var counts={}; live.forEach(function(p){ counts[p.type]=(counts[p.type]||0)+1; });
+  var tags={}; live.forEach(function(p){ (p.tags||[]).forEach(function(t){ tags[t]=(tags[t]||0)+1; }); });
+
+  $('cntAll').textContent=live.length;
+  $('cntFav').textContent=live.filter(function(p){return p.favorite;}).length;
+  $('cntTrash').textContent=trash.length;
+  $('typeNav').innerHTML=Object.keys(TYPE_NAME).map(function(t){
+    return '<button data-type="'+t+'" class="'+(S.view==='type:'+t?'on':'')+'">'+TYPE_NAME[t]+' <i>'+(counts[t]||0)+'</i></button>';
+  }).join('');
+  $('tagNav').innerHTML=Object.keys(tags).length?Object.keys(tags).sort().map(function(t){
+    return '<button data-tag="'+esc(t)+'" class="'+(S.tag===t?'on':'')+'">'+esc(t)+' <i>'+tags[t]+'</i></button>';
+  }).join(''):'<div class="hint" style="padding:0 6px">还没有标签</div>';
+  var sideBtns=document.querySelectorAll('.side button[data-view]');
+  for(var i=0;i<sideBtns.length;i++) sideBtns[i].classList.toggle('on',sideBtns[i].getAttribute('data-view')===S.view);
+
+  var chip='<span class="chip'+(S.tag===''?' on':'')+'" data-chip="">全部标签</span>';
+  Object.keys(tags).sort().forEach(function(t){ chip+='<span class="chip'+(S.tag===t?' on':'')+'" data-chip="'+esc(t)+'">'+esc(t)+'</span>'; });
+  $('tagChips').innerHTML=chip;
+
+  var f=S.filter.toLowerCase();
+  var list=all.filter(function(p){
+    if(S.view==='trash'){ if(!p._deleted) return false; }
+    else if(p._deleted) return false;
+    else if(S.view==='fav' && !p.favorite) return false;
+    else if(S.view.indexOf('type:')===0 && p.type!==S.view.slice(5)) return false;
+    if(S.tag && (p.tags||[]).indexOf(S.tag)<0) return false;
+    if(!f) return true;
+    return [p.title,p.fields&&p.fields.username,p.note,(p.urls||[]).join(' '),(p.tags||[]).join(' ')].join(' ').toLowerCase().indexOf(f)>=0;
+  }).sort(function(a,b){ return (b.favorite?1:0)-(a.favorite?1:0) || (b.updatedAt||0)-(a.updatedAt||0); });
+
+  if(!list.length){ $('itemList').innerHTML='<div class="empty">'+(all.length?'没有匹配的条目':'保险库还是空的，点「新增条目」存第一条密码')+'</div>'; }
+  else $('itemList').innerHTML=list.map(function(p){
+    var pw=(p.fields&&p.fields.password)||'', shown=!!S.revealed[p.id];
+    var h='<div class="item'+(p._deleted?' deleted':'')+'" data-id="'+esc(p.id)+'">'+
+      '<div class="item-head"><span class="badge">'+esc(TYPE_NAME[p.type]||p.type)+'</span><b>'+esc(p.title)+'</b>'+
+      '<button class="star" data-act="fav" title="收藏">'+(p.favorite?'★':'☆')+'</button></div>';
+    if(p.fields&&p.fields.username) h+='<div class="row"><span class="k">账号</span><span class="v">'+esc(p.fields.username)+'</span><span class="acts"><button data-act="copyuser">复制</button></span></div>';
+    if(pw) h+='<div class="row"><span class="k">密码</span><span class="v">'+(shown?esc(pw):'••••••••••••')+'</span><span class="acts"><button data-act="reveal">'+(shown?'隐藏':'显示')+'</button><button data-act="copypw">复制</button></span></div>';
+    if(p.urls&&p.urls[0]) h+='<div class="row"><span class="k">网址</span><span class="v">'+esc(p.urls[0])+'</span></div>';
+    if(p.note) h+='<div class="row"><span class="k">备注</span><span class="v">'+esc(p.note)+'</span></div>';
+    if((p.tags||[]).length) h+='<div class="tags">'+p.tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join('')+'</div>';
+    h+='<div class="item-foot">';
+    if(p._deleted){ h+='<button data-act="restore">恢复</button><button class="danger" data-act="purge">彻底删除</button>'; }
+    else{ h+='<button data-act="edit">编辑</button><button class="danger" data-act="del">删除</button>'; }
+    h+='<span class="ts">'+new Date(p.updatedAt||0).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span></div></div>';
+    return h;
+  }).join('');
+
+  var a=S.account||{};
+  var need=!a.lastBackupAt || (VC.now()-a.lastBackupAt>7*86400000);
+  $('backupBanner').style.display=need?'flex':'none';
+  if(need) $('backupBannerText').textContent=a.lastBackupAt?('距上次导出备份已超过 7 天（'+fmtTime(a.lastBackupAt)+'）。本地存储可能被浏览器清理，请导出一份加密备份。'):'还没有导出过备份。本版本数据只存在这台设备，建议现在导出一份加密备份文件。';
+}
+
+/* ---------- 复制（到期只清自己的值） ---------- */
+async function copyWithClear(text){
+  S.lastCopied=text;
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){ var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(_){} ta.remove(); }
+  toast('已复制，'+S.clipSec+' 秒后自动清除剪贴板');
+  setTimeout(async function(){
+    try{ var c=await navigator.clipboard.readText(); if(c===text){ await navigator.clipboard.writeText(''); if(S.lastCopied===text) S.lastCopied=null; } }
+    catch(e){}
+  },S.clipSec*1000);
+}
+
+/* ---------- 备份 / 恢复 ---------- */
+function buildBackupText(){ return VC.buildBackup(S.account, getItems(), curRev()); }
+function download(name,text){
+  var blob=new Blob([text],{type:'application/json'});
+  var url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); },2000);
+}
+function exportBackup(){
+  var a=S.account; a.lastBackupAt=VC.now(); setAccount(a); S.account=a;
+  var d=new Date(), stamp=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  download('锦囊备份-'+stamp+'.json',buildBackupText());
+  render(); toast('加密备份已导出，请离线妥善保存');
+}
+function applyBackup(text,force){
+  var d=VC.parseBackup(text);
+  if(S.account && !force) throw new Error('CONFIRM_OVERWRITE');
+  setAccount(d.account); persistItems(d.items||{}); setRev(d.rev||0);
+  S.vk=null; S.plain={}; S.revealed={}; S.account=d.account;
+  stopLockTimer(); closeModal();
+  show('s-locked'); bootLocked(); syncChrome();
+  toast('备份已导入，请用备份文件对应的主密码解锁');
+}
+function importBackup(file){
+  var reader=new FileReader();
+  reader.onload=function(){
+    try{ applyBackup(String(reader.result),false); }
+    catch(e){
+      if(e.message==='CONFIRM_OVERWRITE'){
+        var text=String(reader.result);
+        openModal('<h3>导入会覆盖当前保险库</h3><p class="mdesc">当前设备已有一个保险库。导入备份会替换本机全部密文，且无法撤销。建议先导出当前库的备份。</p>'+
+          '<div class="no">如果当前库里还有未备份的条目，请先取消并导出。</div>'+
+          '<div class="btnrow"><button class="danger" id="impForce">确认覆盖导入</button><button id="impCancel">取消</button></div>');
+        $('impCancel').onclick=closeModal;
+        $('impForce').onclick=function(){ try{ applyBackup(text,true); }catch(err){ toast('导入失败：'+err.message); } };
+      } else toast('导入失败：'+e.message);
+    }
+  };
+  reader.onerror=function(){ toast('文件读取失败'); };
+  reader.readAsText(file);
+}
+
+/* ---------- 设置 / 主密码 / 恢复码 ---------- */
+function openSettings(){
+  openModal('<h3>设置</h3><p class="mdesc">这些偏好不是敏感数据，明文保存在本地；保险库内容始终加密。</p>'+
+    '<label>空闲自动锁定</label><select id="setIdle">'+
+      [[0,'关闭（不推荐）'],[60000,'1 分钟'],[300000,'5 分钟'],[900000,'15 分钟'],[1800000,'30 分钟']].map(function(x){return '<option value="'+x[0]+'"'+(S.idleMs===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select>'+
+    '<label class="switch"><input type="checkbox" id="setHide" '+(S.hideLock?'checked':'')+'> 切到后台立即锁定</label>'+
+    '<label>剪贴板自动清除（秒）</label><input type="number" id="setClip" min="5" max="120" value="'+S.clipSec+'">'+
+    '<div class="sep" style="height:1px;background:var(--line);margin:18px 0"></div>'+
+    '<div class="kv"><span>加密方式</span><span>AES-256-GCM · PBKDF2-SHA256 600k</span></div>'+
+    '<div class="kv"><span>保险库创建</span><span>'+esc(fmtTime(S.account.createdAt))+'</span></div>'+
+    '<div class="kv"><span>上次导出备份</span><span>'+esc(fmtTime(S.account.lastBackupAt))+'</span></div>'+
+    '<div class="btnrow"><button id="setSave">保存偏好</button><button id="setPw">修改主密码</button><button id="setRecovery">重新生成恢复码</button></div>'+
+    '<div class="btnrow"><button class="danger" id="setWipe">清空本机全部数据</button></div>');
+  $('setSave').onclick=function(){
+    S.idleMs=parseInt($('setIdle').value,10)||0;
+    S.hideLock=$('setHide').checked;
+    S.clipSec=Math.max(5,Math.min(120,parseInt($('setClip').value,10)||15));
+    setPrefs({idleMs:S.idleMs,hideLock:S.hideLock,clipSec:S.clipSec});
+    S.lastActivity=VC.now(); startLockTimer(); closeModal(); toast('偏好已保存');
+  };
+  $('setPw').onclick=function(){ closeModal(); openChangePw(false); };
+  $('setRecovery').onclick=function(){ closeModal(); openNewRecovery(); };
+  $('setWipe').onclick=function(){
+    openModal('<h3>确认清空？</h3><p class="mdesc">将删除本机的账户、全部密文与偏好，且不可恢复。请先确认已导出备份。</p>'+
+      '<div class="no">清空后，只有持有加密备份文件 + 主密码才能恢复。</div>'+
+      '<div class="btnrow"><button class="danger" id="wipeYes">我已备份，确认清空</button><button id="wipeNo">取消</button></div>');
+    $('wipeNo').onclick=closeModal;
+    $('wipeYes').onclick=function(){
+      Object.keys(LS).forEach(function(k){ localStorage.removeItem(LS[k]); });
+      S.vk=null; S.plain={}; S.account=null; stopLockTimer(); closeModal();
+      show('s-welcome'); syncChrome(); toast('本机数据已清空');
+    };
+  };
+}
+function openChangePw(force){
+  openModal('<h3>'+(force?'请设置新的主密码':'修改主密码')+'</h3>'+
+    '<p class="mdesc">'+(force?'你刚用恢复码解锁，说明原主密码已遗忘，请立即设置一个新主密码。':'只重新包裹密钥，所有条目密文原样不动，不会重加密，也不会影响恢复码。')+'</p>'+
+    '<label>新主密码（至少 10 位）</label><input type="password" id="cpPw" autocomplete="new-password">'+
+    '<label>确认新主密码</label><input type="password" id="cpPw2" autocomplete="new-password">'+
+    '<div class="btnrow">'+(force?'':'<button id="cpCancel">取消</button>')+'<button class="primary" id="cpSave">保存新主密码</button></div>');
+  if($('cpCancel')) $('cpCancel').onclick=closeModal;
+  $('cpSave').onclick=async function(){
+    var p=$('cpPw').value, p2=$('cpPw2').value;
+    if(p.length<10){ toast('至少 10 位'); return; }
+    if(p!==p2){ toast('两次输入不一致'); return; }
+    busy(true);
+    try{
+      var r=await VC.rewrap(S.vk,p);
+      var a=S.account; a.salt=r.salt; a.wrapped=r.wrapped;
+      setAccount(a); S.account=a; closeModal();
+      toast('主密码已更新，条目密文未改动');
+    }catch(e){ toast('修改失败：'+e.message); }
+    finally{ busy(false); }
+  };
+}
+function openNewRecovery(){
+  var pending=null;
+  (async function(){
+    try{ pending=await VC.refreshRecovery(S.vk); }
+    catch(e){ toast('生成失败：'+e.message); return; }
+    openModal('<h3>重新生成恢复码</h3><p class="mdesc">旧恢复码在确认前仍然有效。请抄写新码并确认，确认后旧码立即作废。</p>'+
+      '<div class="recovery" id="newRecCode">'+esc(pending.code)+'</div>'+
+      '<label>输入新恢复码以确认</label><input id="newRecConfirm" class="mono" autocomplete="off">'+
+      '<div class="btnrow"><button class="primary" id="newRecSave">确认并作废旧码</button><button id="newRecCancel">取消</button></div>');
+    $('newRecCancel').onclick=closeModal;
+    $('newRecSave').onclick=function(){
+      if(!pending) return;
+      if(VC.normCode($('newRecConfirm').value)!==VC.normCode(pending.code)){ toast('恢复码不匹配'); return; }
+      var a=S.account; a.recovery=pending.recovery; setAccount(a); S.account=a;
+      closeModal(); toast('恢复码已更新，旧码已作废');
+    };
+  })();
+}
+
+/* ---------- 工具面板 ---------- */
+function openGenerator(){
+  openModal('<h3>密码生成器</h3><p class="mdesc">全部在本机生成，用 crypto.getRandomValues 取随机字节并做拒绝采样，不发送任何数据。</p>'+
+    '<div class="genrow"><label>长度 <input type="range" id="gLen" min="8" max="40" value="20"></label><span id="gLenVal" class="mono">20</span>'+
+    '<label><input type="checkbox" id="gPhrase"> 易记短语模式</label></div>'+
+    '<div class="genrow"><label><input type="checkbox" id="gUpper" checked> 大写</label><label><input type="checkbox" id="gLower" checked> 小写</label>'+
+    '<label><input type="checkbox" id="gDigit" checked> 数字</label><label><input type="checkbox" id="gSym" checked> 符号</label>'+
+    '<label><input type="checkbox" id="gExcl" checked> 排除易混淆字符</label></div>'+
+    '<div class="genout" id="gOut"></div><div class="hint" id="gEntropy"></div>'+
+    '<div class="btnrow"><button class="primary" id="gGen">重新生成</button><button id="gCopy">复制</button><button id="gUse">用于新条目</button></div>',true);
+  function doGen(){
+    var len=parseInt($('gLen').value,10)||20; $('gLenVal').textContent=len;
+    var phrase=$('gPhrase').checked;
+    var r=VC.genPassword({ length:phrase?Math.max(3,Math.round(len/4)):len, phrase:phrase,
+      upper:$('gUpper').checked, lower:$('gLower').checked, digits:$('gDigit').checked,
+      symbols:$('gSym').checked, exclude:$('gExcl').checked });
+    $('gOut').textContent=r.value;
+    $('gEntropy').textContent=(phrase?'词表 '+r.charset+' 词 · ':'字符集 '+r.charset+' 种 · ')+'约 '+r.entropy+' bit 熵'+(r.entropy<60?'（偏低，建议提高长度或改用随机字符模式）':'（≥60 bit，适合绝大多数场景）');
+    return r.value;
+  }
+  $('gLen').oninput=doGen;
+  ['gPhrase','gUpper','gLower','gDigit','gSym','gExcl'].forEach(function(id){ $(id).onchange=doGen; });
+  $('gGen').onclick=doGen;
+  $('gCopy').onclick=function(){ copyWithClear($('gOut').textContent); };
+  $('gUse').onclick=function(){ var v=$('gOut').textContent; closeModal(); openEditor(null); $('ePass').value=v; $('ePass').type='text'; };
+  doGen();
+}
+function openHealth(){
+  var h=VC.health(Object.keys(S.plain).map(function(k){return S.plain[k];}));
+  var rows='';
+  function group(title,arr,reason){ if(!arr.length) return ''; return '<div class="side-title" style="margin-top:14px">'+title+'</div>'+arr.slice(0,12).map(function(p){return '<div class="kv"><span>'+esc(p.title)+'</span><span>'+reason+'</span></div>';}).join('')+(arr.length>12?'<div class="hint">还有 '+(arr.length-12)+' 条…</div>':''); }
+  rows+=group('短于 12 位',h.weakItems,'密码过短');
+  rows+=group('重复使用',h.reuseItems,'与其他条目相同');
+  rows+=group('超过 180 天未更新',h.oldItems,'建议定期更换');
+  openModal('<h3>安全体检</h3><p class="mdesc">全部在本机明文上计算，不会上传任何密码；不联网、不调用泄露检测接口。</p>'+
+    '<div class="metrics"><div class="metric"><div class="n">'+h.score+'</div><div class="l">健康评分</div></div>'+
+    '<div class="metric"><div class="n">'+h.total+'</div><div class="l">条目总数</div></div>'+
+    '<div class="metric"><div class="n" style="color:'+(h.weak?'var(--warn)':'var(--ink)')+'">'+h.weak+'</div><div class="l">弱密码</div></div>'+
+    '<div class="metric"><div class="n" style="color:'+(h.reused?'var(--warn)':'var(--ink)')+'">'+h.reused+'</div><div class="l">重复复用</div></div></div>'+
+    (rows||'<div class="ok">当前没有明显的弱密码、复用或长期未更新问题。</div>')+
+    '<div class="note">本版本不含 HIBP 泄露检测（需要联网，且要用 k-anonymity 只发哈希前 5 位）。生产版可加，但仍应保持密码不出设备。</div>',true);
+}
+function openBackup(){
+  openModal('<h3>备份与恢复</h3><p class="mdesc">备份文件是完整密文（含被主密码包裹的密钥），可以离线保存、跨设备导入；没有主密码或恢复码，谁也打不开。</p>'+
+    '<div class="kv"><span>上次导出</span><span>'+esc(fmtTime(S.account.lastBackupAt))+'</span></div>'+
+    '<div class="kv"><span>条目密文数</span><span>'+Object.keys(getItems()).length+'</span></div>'+
+    '<div class="kv"><span>当前版本库格式</span><span>safekeep-local v1</span></div>'+
+    '<div class="note">浏览器清理站点数据、无痕模式关闭、换设备或换浏览器都会导致本地数据丢失。<b>导出的加密备份是唯一副本</b>，请定期更新并离线保管。</div>'+
+    '<div class="btnrow"><button class="primary" id="bkExport">导出加密备份</button><button id="bkImport">从备份导入</button></div>'+
+    '<div class="hint">导入会覆盖本机现有保险库，操作前会二次确认。</div>');
+  $('bkExport').onclick=function(){ exportBackup(); closeModal(); };
+  $('bkImport').onclick=function(){ closeModal(); $('fileInput').click(); };
+}
+function openAccount(){
+  openModal('<h3>账号中心与云端同步</h3><p class="mdesc">当前是<b>本地模式</b>：不需要登录，数据只保存在这台设备。</p>'+
+    '<div class="kv"><span>账号中心</span><span class="mono">account.alsoapp.com</span></div>'+
+    '<div class="kv"><span>部署方式</span><span>私有化 Logto（自有账号体系）</span></div>'+
+    '<div class="kv"><span>本版云端同步</span><span>未启用</span></div>'+
+    '<div class="note">第一版只交付本地闭环。点击右侧按钮只会打开账号中心登录页，<b>不会上传任何数据，也不会改变本地保险库</b>。</div>'+
+    '<ul class="tight"><li>下一版：OIDC 授权码 + PKCE 跳转到账号中心 → 登录完成自动回调 → 建立登录态。</li>'+
+    '<li>登录后把本地库<b>零重加密提升</b>到云端：直接上传现有 wrappedKey 与条目密文，主密码不变、条目不重新加密。</li>'+
+    '<li>已实测该实例支持 Device Authorization Grant，小程序端可用设备码流程完成登录，不需要内嵌浏览器回调。</li>'+
+    '<li>身份与密钥始终解耦：Logto 密码可重置，主密码不可找回；重置账号密码只能找回账号，找不回数据。</li></ul>'+
+    '<div class="btnrow"><button id="acOpen">打开账号中心</button><button id="acClose">知道了</button></div>');
+  $('acClose').onclick=closeModal;
+  $('acOpen').onclick=function(){ window.open('https://account.alsoapp.com','_blank','noopener,noreferrer'); toast('已在新标签页打开账号中心，本地数据不受影响'); };
+}
+function openStorage(){
+  var items=getItems(), keys=Object.keys(items);
+  var raw=localStorage.getItem(LS.a)+'\n'+localStorage.getItem(LS.i)+'\n'+localStorage.getItem(LS.p);
+  var list=keys.length?keys.slice(-6).reverse().map(function(id){
+    var r=items[id];
+    return '<div class="cipher"><div><span class="ck">id </span>'+esc(id.slice(0,18))+'…　<span class="ck">rev </span>'+esc(r.rev)+'　<span class="ck">deleted </span>'+esc(!!r.deleted)+'</div>'+
+      '<div><span class="ck">iv </span>'+esc(r.iv)+'</div><div><span class="ck">ct </span><span class="ct">'+esc(String(r.ct).slice(0,72))+'…</span></div></div>';
+  }).join(''):'<div class="empty">本地还没有条目密文</div>';
+  openModal('<h3>本地存储自检</h3><p class="mdesc">直接读取浏览器 localStorage 的原始内容，验证「本地存储密码」存的是密文而不是明文。</p>'+
+    '<div class="kv"><span>账户记录</span><span>'+esc(LS.a)+'</span></div>'+
+    '<div class="kv"><span>条目密文</span><span>'+esc(LS.i)+' · '+keys.length+' 条</span></div>'+
+    '<div class="kv"><span>全局 rev</span><span>'+curRev()+'</span></div>'+
+    '<div class="verify"><input id="vq" placeholder="输入一个已保存的站点名或账号"><button id="vbtn">查找明文</button></div>'+
+    '<div id="vres"></div>'+
+    '<div class="side-title" style="margin-top:16px">最近写入的密文记录</div>'+list,true);
+  $('vbtn').onclick=function(){
+    var q=$('vq').value.trim();
+    if(!q){ $('vres').innerHTML='<div class="no">请输入要查找的文字</div>'; return; }
+    var hit=raw.toLowerCase().indexOf(q.toLowerCase())>=0;
+    $('vres').innerHTML=hit?'<div class="no">意外：在本地存储里找到了明文，说明加密边界有漏洞</div>':'<div class="ok">未找到（符合预期）：本地只存包裹密钥与 AES-GCM 密文</div>';
+  };
+}
+function openPanel(kind){
+  if(kind==='generator') openGenerator();
+  else if(kind==='health') openHealth();
+  else if(kind==='backup') openBackup();
+  else if(kind==='settings') openSettings();
+  else if(kind==='account') openAccount();
+  else if(kind==='storage') openStorage();
+}
+
+/* ---------- 事件绑定 ---------- */
+function wire(){
+  $('newPw').addEventListener('input',function(){
+    var v=this.value, score=Math.min(100,v.length*5+(/[A-Z]/.test(v)?10:0)+(/\d/.test(v)?10:0)+(/[^A-Za-z0-9]/.test(v)?10:0));
+    $('pwBar').style.width=Math.min(100,score)+'%';
+    $('pwBar').style.background=score<45?'var(--warn)':(score<75?'#c08a20':'var(--accent)');
+    $('pwHint').textContent=v.length<10?'至少 10 位，建议用一句长口令':(score<60?'偏弱，建议加长或加入更多字符类型':'长度不错，记得用恢复码兜底');
+  });
+  $('btnCreate').onclick=createVault;
+  $('btnConfirmRecovery').onclick=confirmRecovery;
+  $('recoveryConfirm').addEventListener('keydown',function(e){ if(e.key==='Enter') confirmRecovery(); });
+
+  $('btnUnlock').onclick=function(){ unlock($('unlockPw').value,false); };
+  $('unlockPw').addEventListener('keydown',function(e){ if(e.key==='Enter') unlock(this.value,false); });
+  $('lnkRecovery').onclick=function(e){ e.preventDefault(); $('unlockByPw').style.display='none'; $('unlockByCode').style.display='block'; S.useRecovery=true; $('unlockCode').focus(); };
+  $('btnBackPw').onclick=function(){ $('unlockByPw').style.display='block'; $('unlockByCode').style.display='none'; S.useRecovery=false; };
+  $('btnUnlockCode').onclick=function(){ unlock($('unlockCode').value,true); };
+  $('unlockCode').addEventListener('keydown',function(e){ if(e.key==='Enter') unlock(this.value,true); });
+  $('btnLockTop').onclick=function(){ lockVault('已手动锁定'); };
+
+  $('btnAdd').onclick=function(){ openEditor(null); };
+  $('search').addEventListener('input',function(){ S.filter=this.value; render(); });
+  $('tagChips').addEventListener('click',function(e){
+    var c=e.target.closest?e.target.closest('[data-chip]'):null; if(!c) return;
+    S.tag=c.getAttribute('data-chip')||''; render();
+  });
+  $('itemList').addEventListener('click',async function(e){
+    var b=e.target.closest?e.target.closest('[data-act]'):null; if(!b) return;
+    var card=b.closest?b.closest('[data-id]'):null; if(!card) return;
+    var id=card.getAttribute('data-id'), act=b.getAttribute('data-act'), p=S.plain[id];
+    if(act==='reveal'){ S.revealed[id]=!S.revealed[id]; render(); }
+    else if(act==='copypw'&&p) copyWithClear(p.fields.password||'');
+    else if(act==='copyuser'&&p) copyWithClear(p.fields.username||'');
+    else if(act==='fav') toggleFav(id);
+    else if(act==='edit') openEditor(p);
+    else if(act==='del') deleteItem(id,false);
+    else if(act==='restore') restoreItem(id);
+    else if(act==='purge') deleteItem(id,true);
+  });
+  document.querySelector('.side').addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('button'):null; if(!b) return;
+    if(b.hasAttribute('data-open')){ openPanel(b.getAttribute('data-open')); return; }
+    if(b.hasAttribute('data-view')){ S.view=b.getAttribute('data-view'); S.tag=''; render(); return; }
+    if(b.hasAttribute('data-type')){ S.view='type:'+b.getAttribute('data-type'); S.tag=''; render(); return; }
+    if(b.hasAttribute('data-tag')){ S.tag=S.tag===b.getAttribute('data-tag')?'':b.getAttribute('data-tag'); S.view='all'; render(); }
+  });
+  $('btnBannerBackup').onclick=function(){ openBackup(); };
+
+  $('btnImportWelcome').onclick=$('btnImportLocked').onclick=function(){ $('fileInput').click(); };
+  $('fileInput').addEventListener('change',function(){ if(this.files&&this.files[0]) importBackup(this.files[0]); this.value=''; });
+  $('modalBg').addEventListener('click',function(e){ if(e.target===this) closeModal(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeModal(); });
+  document.addEventListener('pointerdown',touch);
+  document.addEventListener('keydown',touch);
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden && S.hideLock && S.vk) lockVault('已切到后台，保险库自动锁定');
+    else if(!document.hidden && S.vk && VC.shouldLock(VC.now(),S.lastActivity,S.idleMs,false)) lockVault('空闲超时，已自动锁定');
+    touch();
+  });
+  window.addEventListener('storage',function(e){
+    if(e.key===LS.a && !S.vk){ bootLocked(); }
+  });
+}
+
+function init(){
+  if(!globalThis.crypto || !globalThis.crypto.subtle || !globalThis.crypto.getRandomValues || typeof globalThis.btoa!=='function'){
+    document.querySelector('#s-welcome .center').innerHTML='<h1>当前环境不支持加密</h1><p class="desc">本应用需要 Web Crypto（crypto.subtle）。请用 Chrome / Edge / Firefox 打开，或在本目录执行 <code>python -m http.server 8080</code> 后访问 http://localhost:8080/index.html</p>';
+    return;
+  }
+  wire();
+  var p=getPrefs();
+  S.idleMs=(typeof p.idleMs==='number')?p.idleMs:300000;
+  S.hideLock=(p.hideLock!==false);
+  S.clipSec=p.clipSec||15;
+  S.account=getAccount();
+  if(!S.account){ show('s-welcome'); }
+  else{ bootLocked(); show('s-locked'); }
+  syncChrome();
+}
+
+init();
+/* TEST_EXPORT_SLOT */
+})();
+</script>
+</body>
+</html>

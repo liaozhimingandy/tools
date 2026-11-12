@@ -1,0 +1,91 @@
+# 前端构建并部署到 GitHub Pages。
+# 触发：push 到 main / workflow_dispatch 手动。
+# 前提：仓库 Settings > Pages > Build and deployment > Source 选 "GitHub Actions"。
+#
+# 需要的仓库变量/密钥（Settings > Secrets and variables > Actions）：
+#   Variables（非敏感，可明文）：
+#     VITE_API_BASE_URL                 后端 HTTPS 根，如 https://api.example.com
+#     VITE_LOGTO_ENDPOINT               Logto endpoint
+#     VITE_LOGTO_APP_ID                 Logto 应用 ID
+#     VITE_LOGTO_RESOURCE               (可选) API resource
+#     VITE_LOGTO_REDIRECT_URI           回调白名单地址（无 fragment），如 https://<user>.github.io/tools/
+#     VITE_LOGTO_POST_LOGOUT_REDIRECT_URI (可选) 登出回跳
+#     VITE_LOGTO_SCOPES                 (可选) 逗号分隔额外 scopes
+#     VITE_PUBLIC_PATH                  Pages 子路径，默认 /tools/（仓库名不是 tools 时改这里）
+#   ——这些值会内联进前端 JS，本就对浏览器可见，故用 Variables 即可，不是密钥。
+#   若任一 VITE_LOGTO_* 或 VITE_API_BASE_URL 缺失，前端自动降级为纯本地，不会白屏。
+
+name: Deploy Frontend to Pages
+
+on:
+  push:
+    branches: [main]
+    # 仅当前端相关文件变动时构建，减少无谓部署
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-github-pages.yml'
+  workflow_dispatch:
+
+# 允许 GITHUB_TOKEN 部署 Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一分支只允许一个部署在跑；不取消进行中的，避免线上半成品
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build (typecheck + bundle)
+        run: npm run build
+        env:
+          # Vite 的 PUBLIC_PATH 由命令行参数注入，优先级高于代码里的默认值
+          VITE_PUBLIC_PATH: ${{ vars.VITE_PUBLIC_PATH }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_LOGTO_ENDPOINT: ${{ vars.VITE_LOGTO_ENDPOINT }}
+          VITE_LOGTO_APP_ID: ${{ vars.VITE_LOGTO_APP_ID }}
+          VITE_LOGTO_RESOURCE: ${{ vars.VITE_LOGTO_RESOURCE }}
+          VITE_LOGTO_REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI }}
+          VITE_LOGTO_POST_LOGOUT_REDIRECT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI }}
+          VITE_LOGTO_SCOPES: ${{ vars.VITE_LOGTO_SCOPES }}
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

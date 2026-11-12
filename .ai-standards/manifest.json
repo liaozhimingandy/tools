@@ -1,0 +1,734 @@
+{
+  "backups": {},
+  "files": {
+    ".ai-standards/CHANGELOG.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "ef7aa57fe735f86cbd8afb141c3a8fd2ca9595adb98becdc20fab41b0919fcf6",
+      "source": "CHANGELOG.md"
+    },
+    ".ai-standards/CONTRIBUTING.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "44c7c59d0ce5390509a102507e70a3f0ca2aacec7801b22d57fc9e2831cdfc07",
+      "source": "CONTRIBUTING.md"
+    },
+    ".ai-standards/LICENSE": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "00057c4bf8a47adffbc89e6c92584455477cc270cc440b2203c8873f3474830a",
+      "source": "LICENSE"
+    },
+    ".ai-standards/README.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "fa7314432c3febc3df41347b85e6c82bb06467a67932fea098d7d58c07d266d8",
+      "source": "README.md"
+    },
+    ".ai-standards/VERSION": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
+      "source": "VERSION"
+    },
+    ".ai-standards/adapters/GLOBAL-INTEGRATION.template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "feb72a89be52430fe268629825a21946ebdd7e5ca794263da385b8d7edba37e9",
+      "source": "adapters/GLOBAL-INTEGRATION.template.md"
+    },
+    ".ai-standards/adapters/README.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "f3d885289277a000f355cfbf05c2239511cfc6268e0d2b3d51dc7240e6d37a04",
+      "source": "adapters/README.md"
+    },
+    ".ai-standards/adapters/claude-code/CLAUDE.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "bdb2d0c2dbb79a8104c03fa200e6be3cd140a107e6ce46872ba8ec2f49819fc5",
+      "source": "adapters/claude-code/CLAUDE.md"
+    },
+    ".ai-standards/adapters/claude-code/README.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "13198284629aa1fde0084c62eb834351f5467cfb109ccb153ef25bd7fee449b1",
+      "source": "adapters/claude-code/README.md"
+    },
+    ".ai-standards/adapters/claude-code/global/ENTRY.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "ee011bdb6d5b29d2ba25fbcf91c368f5015165fd724e22740751f5bde077d69d",
+      "source": "adapters/claude-code/global/ENTRY.md"
+    },
+    ".ai-standards/adapters/claude-code/mappings.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "fb19f295d7ea7508e6a17de9918891644678416b45d95584141e36c4b7eef582",
+      "source": "adapters/claude-code/mappings.md"
+    },
+    ".ai-standards/adapters/claude-code/references.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "c730f205a5a788ba6eaceb551e3cd46809fb33f820d92577671dbe7d1bf90beb",
+      "source": "adapters/claude-code/references.md"
+    },
+    ".ai-standards/adapters/claude-code/rules/ai-engineering-standards.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "8c8a393972b75e146d80ed5ecdcdb484bfc4f394c967a96bb0faf099ffd11af7",
+      "source": "adapters/claude-code/rules/ai-engineering-standards.md"
+    },
+    ".ai-standards/adapters/claude-code/templates/claude-rules-snippet.template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "a99076f58c6f18c8a6ff8e6181ecf520b95f7d70f82e50050803600679a37b30",
+      "source": "adapters/claude-code/templates/claude-rules-snippet.template.md"
+    },
+    ".ai-standards/adapters/claude-code/templates/subagent-mapping.template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "1fa55b5be39722188ab1221dc8cb85d4cad7729d399b7a3caf11fd93e8cb57c5",
+      "source": "adapters/claude-code/templates/subagent-mapping.template.md"
+    },
+    ".ai-standards/adapters/codex/AGENTS.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "ff3fdcc24d6da1dc661e8d14cb0005d7836ceb93008196d4957b6a4f788e5ee4",
+      "source": "adapters/codex/AGENTS.md"
+    },
+    ".ai-standards/adapters/codex/README.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "cc1b8c1195b1de19130dfa8c4ee9d76c04c2b283641ad8fe49b7ee8f01e97394",
+      "source": "adapters/codex/README.md"
+    },
+    ".ai-standards/adapters/codex/global/ENTRY.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "dc093cc039313f443800e98d8ed5dcfe48d6b30a53a501bc27121a9b32d679fc",
+      "source": "adapters/codex/global/ENTRY.md"
+    },
+    ".ai-standards/adapters/codex/mappings.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "101d67d32eceb750b12251189619b92aab4602c7a1b8aa3804e0cd1483016d39",
+      "source": "adapters/codex/mappings.md"
+    },
+    ".ai-standards/adapters/codex/references.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "e8f6a6fdd9bb11a1173ac7eb4b9b88b5cd391479c250d14849ec0416770043de",
+      "source": "adapters/codex/references.md"
+    },
+    ".ai-standards/adapters/codex/templates/project-agents-snippet.template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "5e5d2fe16cf2bd6d4b620fb75bc4c7b97a3be947153abf7b52a37138ae50ba1c",
+      "source": "adapters/codex/templates/project-agents-snippet.template.md"
+    },
+    ".ai-standards/adapters/copilot/README.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "5ff74d5bcc6352872f793d36934e556c4dee848844a95b6e2520a0f61f14fe89",
+      "source": "adapters/copilot/README.md"
+    },
+    ".ai-standards/adapters/copilot/copilot-instructions.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "734d857748aa04d255d1844ae1ff28d6d101c1c639a702117630d492f4e222dc",
+      "source": "adapters/copilot/copilot-instructions.md"
+    },
+    ".ai-standards/adapters/copilot/global/ENTRY.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "87970f395ea5101252a258b415e83443a3417fc7ff3b6c3a122643314218a478",
+      "source": "adapters/copilot/global/ENTRY.md"
+    },
+    ".ai-standards/adapters/copilot/instructions.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "3019c0015b2d7c3e8b50e02ee18c9e684154a8e38769ecddfdeaa2a2fd9630e1",
+      "source": "adapters/copilot/instructions.md"
+    },
+    ".ai-standards/adapters/copilot/mappings.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "6463bf8e58eed6b656633406b980e99c75ffe20fc5f9fe3d255c7b7ca088dbda",
+      "source": "adapters/copilot/mappings.md"
+    },
+    ".ai-standards/adapters/copilot/references.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "aaa3106b564b52b7699a85a781bb7f9eea35461a028be81fb981237e204f9d50",
+      "source": "adapters/copilot/references.md"
+    },
+    ".ai-standards/adapters/copilot/templates/custom-agent-mapping.template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "075fa3b6a63cdc1ea1e7994b1bf9f81387e4481d0eb765f1065daa5f35f5cfe4",
+      "source": "adapters/copilot/templates/custom-agent-mapping.template.md"
+    },
+    ".ai-standards/adapters/copilot/templates/path-rule.template.instructions.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "d7800380feb3d86fd2af40022895d446df4f20cd6ca39fec87084c6f4b2d404d",
+      "source": "adapters/copilot/templates/path-rule.template.instructions.md"
+    },
+    ".ai-standards/adapters/cursor/README.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "991143549c0241116e4e60957d1c1e5826cf0152d28a47dcd3ff932078f6f85a",
+      "source": "adapters/cursor/README.md"
+    },
+    ".ai-standards/adapters/cursor/mappings.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "b9cab0f4f31a813e41fcda75f9e627f8711505441d1384d106f2efb06d7bdd0d",
+      "source": "adapters/cursor/mappings.md"
+    },
+    ".ai-standards/adapters/cursor/references.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "4e92fb09707c96c3fd66a6e56c307de851d74d9d855af940ef64d2093ad64854",
+      "source": "adapters/cursor/references.md"
+    },
+    ".ai-standards/adapters/cursor/rules/ai-engineering-standards.mdc": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "6da862804139e8de562e42ae82b691ff95f878d3429a1ed59d5401a0f6b95362",
+      "source": "adapters/cursor/rules/ai-engineering-standards.mdc"
+    },
+    ".ai-standards/adapters/cursor/templates/path-rule.template.mdc": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "d5beb9f9029b9e611bfefd37faa397094d054722c9d339dd5be216306463db5b",
+      "source": "adapters/cursor/templates/path-rule.template.mdc"
+    },
+    ".ai-standards/adapters/cursor/templates/subagent-mapping.template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "a4e3162130ad3d3e77c22244b5d32b0e054f7159fbd44003c13071814c56f487",
+      "source": "adapters/cursor/templates/subagent-mapping.template.md"
+    },
+    ".ai-standards/adapters/workbuddy/CODEBUDDY.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "1c4efd88b7a25713fb76ebe5400447d3fabd0f2a92ff0043e413b212211084ef",
+      "source": "adapters/workbuddy/CODEBUDDY.md"
+    },
+    ".ai-standards/adapters/workbuddy/README.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "73e1f8ee16d7a37c8e1c5d01912e9134e2bb5753970f344fe2594b4ee0563f57",
+      "source": "adapters/workbuddy/README.md"
+    },
+    ".ai-standards/adapters/workbuddy/mappings.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "70d0d101e254e29868c1773cc26dae8872e390416026f461685258f001bba4fc",
+      "source": "adapters/workbuddy/mappings.md"
+    },
+    ".ai-standards/adapters/workbuddy/references.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "d0bf23df05954959d10d991b40468422de4749183061a6bdb35bc4d25955a221",
+      "source": "adapters/workbuddy/references.md"
+    },
+    ".ai-standards/adapters/workbuddy/rules/ai-engineering-standards.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "82c55b8fc666169761d10d7ea3fbadf6fbc16ee3777b3599ebcc94d06ead677c",
+      "source": "adapters/workbuddy/rules/ai-engineering-standards.md"
+    },
+    ".ai-standards/adapters/workbuddy/templates/agent-mapping.template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "222f1ef1ee5d78439d9a58f8c529b8c98e2c0e5aa1c034f7d40cc9c9afc1c125",
+      "source": "adapters/workbuddy/templates/agent-mapping.template.md"
+    },
+    ".ai-standards/adapters/workbuddy/templates/codebuddy-rules-snippet.template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "2b2b654d5627a7f0bae1c8f20ea1b1514a048727666e5803087b4d9cc21a9104",
+      "source": "adapters/workbuddy/templates/codebuddy-rules-snippet.template.md"
+    },
+    ".ai-standards/agents/architect.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "20c3acd78d40954b78f8c116a0a73712627060bc3237281dc8673ed10b65b4e9",
+      "source": "agents/architect.md"
+    },
+    ".ai-standards/agents/developer.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "56eabcd2428c5149cefa64be96fcbdce599cf87045772f61bb978aa259d1594b",
+      "source": "agents/developer.md"
+    },
+    ".ai-standards/agents/reviewer.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "7365c5939c2ae811a91517ace6eba3efba6af11a81b1e973fa8f9050a70ec683",
+      "source": "agents/reviewer.md"
+    },
+    ".ai-standards/agents/tester.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "63fc7db672430b13b4acf44d212d2731122bda17d62f50276d8e95b878607176",
+      "source": "agents/tester.md"
+    },
+    ".ai-standards/core/README.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "77b7efae2beb57c7cd6e0acb165c9889d2332725ad8defd142060237baef1ced",
+      "source": "core/README.md"
+    },
+    ".ai-standards/core/ai-behavior.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "6293716b6a293361356de59f9fedce42d8d0d859b0407717798e895b96ae739d",
+      "source": "core/ai-behavior.md"
+    },
+    ".ai-standards/core/architecture-principles.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "2e5586ce1e878f7cbadbce84d99f373e3a12ebf3d95cc94c5a1e3eb96aefb46b",
+      "source": "core/architecture-principles.md"
+    },
+    ".ai-standards/core/coding-principles.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "3f406a4588afca20e6110effa6171efe4935cb1bf5e662f5b05a9acf96af91e2",
+      "source": "core/coding-principles.md"
+    },
+    ".ai-standards/core/documentation-principles.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "77403ed598e18858a8774535f541df93a5cab22c67bea80fa60feb03baa71b95",
+      "source": "core/documentation-principles.md"
+    },
+    ".ai-standards/core/engineering-principles.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "b5a81d9633446f9b5352be423dd04a313528631f215812cb1c353c4299e8c52e",
+      "source": "core/engineering-principles.md"
+    },
+    ".ai-standards/core/security-principles.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "0b60ac7cc4138542f043a2af780350d6975484e9f97c84f04314a692c8058e40",
+      "source": "core/security-principles.md"
+    },
+    ".ai-standards/core/testing-principles.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "a0b85519a4f71f6bce49c98a3764eba1a3da3db743a7b2e4e6addfcc3a385e0d",
+      "source": "core/testing-principles.md"
+    },
+    ".ai-standards/docs/acceptance-report.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "0ba0ecf687d3d7883e9451da3dbb2dd6c39107cf08b903f86af9da8bdc1e66a8",
+      "source": "docs/acceptance-report.md"
+    },
+    ".ai-standards/docs/architecture.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "ea2355bde8b5f6b4448f66b9e3b42b028b9e06b7eec4f001d2cbf1bdcab28f72",
+      "source": "docs/architecture.md"
+    },
+    ".ai-standards/docs/architecture/tool-compatibility.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "a80e6e59c584e814c7a9e1396f445cda40d52e91fef745fc3e34b13f487f7b70",
+      "source": "docs/architecture/tool-compatibility.md"
+    },
+    ".ai-standards/docs/installation.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "b90f716885e9581564a8072646b7101925c3bcf5c0e646bb08eb4e00dd8675b3",
+      "source": "docs/installation.md"
+    },
+    ".ai-standards/docs/quality/compatibility-testing.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "4a7e699b5aa492c326a247916f0eebd1cb777e857fcd34a41c12e3e441880a68",
+      "source": "docs/quality/compatibility-testing.md"
+    },
+    ".ai-standards/docs/quality/quality-gates.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "34e86015ac69bf291ae6e5c48095e40d38d46cc5e71638cc0c1081398e1ab7c0",
+      "source": "docs/quality/quality-gates.md"
+    },
+    ".ai-standards/docs/quality/regression-testing.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "12d8ffddbaf04f6d85a82d34423d23ce44c712de2ffce4caaa86ebc25db27d1e",
+      "source": "docs/quality/regression-testing.md"
+    },
+    ".ai-standards/docs/release/release-checklist.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "41613a90c738bc5e2b06a157c3126959d1ad008412e7bba1551de0ae60ee500c",
+      "source": "docs/release/release-checklist.md"
+    },
+    ".ai-standards/docs/release/release-process.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "bab3b8a121ac576bc54dfb1c67f623ede02bda6705e98937d8116d5b53762070",
+      "source": "docs/release/release-process.md"
+    },
+    ".ai-standards/docs/release/versioning.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "0340bd2960bcd7bb535d47e7255fbb4a401ea19881fb544dd58056894bab98a8",
+      "source": "docs/release/versioning.md"
+    },
+    ".ai-standards/docs/skills-guide.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "de22568b50be46a5f6d3ca0a1560fb1357a3ef424a682508c4742c83df4e8cbb",
+      "source": "docs/skills-guide.md"
+    },
+    ".ai-standards/docs/standards-guide.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "4203fc5cba41797fb5dd1708835f705efbfd75061f024b13a2a1cc77c117ddf3",
+      "source": "docs/standards-guide.md"
+    },
+    ".ai-standards/docs/tool-adapters.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "ccdaeed381bac65cd72140b81b0421d07ba509df6db31345bacea76d36716d90",
+      "source": "docs/tool-adapters.md"
+    },
+    ".ai-standards/docs/versioning.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "cd7d049ab18356b9dc5d10664445a4f0edd649957458ac6f89704233a4ea349b",
+      "source": "docs/versioning.md"
+    },
+    ".ai-standards/skills/architecture-design/SKILL.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "f960d82375146e3683842113b56a5dbc06ad1fe150ef59d535de174b83a02f64",
+      "source": "skills/architecture-design/SKILL.md"
+    },
+    ".ai-standards/skills/architecture-design/assets/decision-template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "de82ae4590264aa03e39916fb125547f7fca27ce4618056d53387159d06c59fb",
+      "source": "skills/architecture-design/assets/decision-template.md"
+    },
+    ".ai-standards/skills/architecture-design/assets/design-template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "8dd45815d8409c56453dd87d8ded84e9c56f203c2cb9ad3476e62859b50912c0",
+      "source": "skills/architecture-design/assets/design-template.md"
+    },
+    ".ai-standards/skills/architecture-design/references/evaluation-dimensions.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "4354403cade56cf473e5863411bcc7fd42c01d931d41a1c1287652658deadc52",
+      "source": "skills/architecture-design/references/evaluation-dimensions.md"
+    },
+    ".ai-standards/skills/code-review/SKILL.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "1554944739e342ca476ce5c85655102eeb93824c6ef1ad8c874ac6f4693a089b",
+      "source": "skills/code-review/SKILL.md"
+    },
+    ".ai-standards/skills/code-review/assets/finding-template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "b0252d3840ce3c40eb3382e55b7aebcb8d91b80a8e58a23cbf2788d706ebca28",
+      "source": "skills/code-review/assets/finding-template.md"
+    },
+    ".ai-standards/skills/code-review/assets/review-report-template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "0e5eaa432cbc8974920cfe73c62a331d8fe039b8b69fd143cdae70c9b448ddfe",
+      "source": "skills/code-review/assets/review-report-template.md"
+    },
+    ".ai-standards/skills/code-review/references/review-checklist.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "d05fca41c361be979e0920b565362c3c56511ff5e56bba82a79b32ec0ba8911c",
+      "source": "skills/code-review/references/review-checklist.md"
+    },
+    ".ai-standards/skills/project-analysis/SKILL.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "9d8ec12cdfd0087700623ee91a2526992c4c8c2866728718e24db8fcc28c4b58",
+      "source": "skills/project-analysis/SKILL.md"
+    },
+    ".ai-standards/skills/project-analysis/assets/report-template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "4205b655b6e5e4556651dca4f266d4a4638632ce6de5c422886dc59d2ee08647",
+      "source": "skills/project-analysis/assets/report-template.md"
+    },
+    ".ai-standards/skills/project-analysis/references/analysis-checklist.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "6c58f8441d1d0ce09b40176f5bde368a50d4a255b30ec89820c19e550f3b3e3b",
+      "source": "skills/project-analysis/references/analysis-checklist.md"
+    },
+    ".ai-standards/skills/requirements-analysis/SKILL.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "84a1bead9d99f0e31e931d9c620d0a25a47287cf2310824caa704c447fcfe7e7",
+      "source": "skills/requirements-analysis/SKILL.md"
+    },
+    ".ai-standards/skills/requirements-analysis/assets/requirements-template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "69ad1ca8be074f697a38735b9e9183e8f1967b0388dbbbb59b63c26078700efb",
+      "source": "skills/requirements-analysis/assets/requirements-template.md"
+    },
+    ".ai-standards/skills/requirements-analysis/references/edge-cases.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "049464daadf982541e5aa93c2088929a18faf03fcc07bf677a7e01140aa9bbd0",
+      "source": "skills/requirements-analysis/references/edge-cases.md"
+    },
+    ".ai-standards/skills/software-development/SKILL.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "74ef8c08a22aa37efe3f9c75b81fc00e9f33cc93564f621448f0d53ca4a2353f",
+      "source": "skills/software-development/SKILL.md"
+    },
+    ".ai-standards/skills/software-development/assets/implementation-report-template.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "feeb38c6271c562b6ea26c34a5f55fc330cfcc543fc5a9543514fd081428c1dc",
+      "source": "skills/software-development/assets/implementation-report-template.md"
+    },
+    ".ai-standards/skills/software-development/references/coding-checklist.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "1f8f2c6fe45a3b21e2e86552280b01f4946308829ad25b8a78a4e0ee286d9812",
+      "source": "skills/software-development/references/coding-checklist.md"
+    },
+    ".ai-standards/skills/software-development/references/verification-checklist.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "6d1224877f1ea06c27befc382961e8cc513b6d1e109b822215801b61d7d75d7e",
+      "source": "skills/software-development/references/verification-checklist.md"
+    },
+    ".ai-standards/standards/backend/api.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "d911be9eb8f6a4b170b7032975303a445111aba49000f5a32dbf7274337f4b6c",
+      "source": "standards/backend/api.md"
+    },
+    ".ai-standards/standards/backend/authentication.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "a85fc7ce4143ec58a8c549c2e30e463e4e5ab848e11fae54e4f53e3e1db61185",
+      "source": "standards/backend/authentication.md"
+    },
+    ".ai-standards/standards/backend/database.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "11ce7e8dc8c6a2ec219800a2688091ae6a441eb89b0dd4db5192773bddf3a1f1",
+      "source": "standards/backend/database.md"
+    },
+    ".ai-standards/standards/devops/ci-cd.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "f16f23015cf442c54aca893571113d1bb5d6fedbc53bfedf0f7e68edfaeb27b1",
+      "source": "standards/devops/ci-cd.md"
+    },
+    ".ai-standards/standards/devops/docker.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "23393519fd1b08ffcfb80d41a82653ecb8c76be71fbb3096a7e881fbc00122a7",
+      "source": "standards/devops/docker.md"
+    },
+    ".ai-standards/standards/devops/git.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "2fc05364fdd87db3857031241e24f99191fb4a9c4e3c17616914e0e46145a97a",
+      "source": "standards/devops/git.md"
+    },
+    ".ai-standards/standards/frontend/component.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "93e1b4e25c38275277f2b750bf5ee7e8f29e37f52afefc3c656b9d3627355a32",
+      "source": "standards/frontend/component.md"
+    },
+    ".ai-standards/standards/frontend/ui.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "11069349f23736d2d9b994c2369901b72c3cec540d1dbb2a098b727921ac7034",
+      "source": "standards/frontend/ui.md"
+    },
+    ".ai-standards/standards/frontend/vue.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "81fc0c7a89286406ceb3ea911b75e519ba7a5dd147a2acd4a5904c75c09638c3",
+      "source": "standards/frontend/vue.md"
+    },
+    ".ai-standards/standards/languages/javascript.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "2f998ae0e2ae74d35eefc82ecc517f744af876dea86b14a924dd09771a68137e",
+      "source": "standards/languages/javascript.md"
+    },
+    ".ai-standards/standards/languages/python.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "b193ef51bd4dae0d94ddd4e61e0baae681606e975e21595dae786beed7fd8b01",
+      "source": "standards/languages/python.md"
+    },
+    ".ai-standards/standards/languages/typescript.md": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "2213cac89f48f40e119c1031d195719427e7c759b361cbda85ebe90eee392cb9",
+      "source": "standards/languages/typescript.md"
+    },
+    ".ai-standards/tooling/templates/SKILL.md.template": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "af930c52fb428b8ee92cf16d7c8af3bac916a1fe08ef919f960b1d7825e1d1c1",
+      "source": "tooling/templates/SKILL.md.template"
+    },
+    ".ai-standards/tooling/templates/STANDARD.md.template": {
+      "category": "bundle",
+      "owner": "managed",
+      "sha256": "0b2bdc47af2c24166308cd89daae1004501b83fb7e106f184ced6499ba3ff3d9",
+      "source": "tooling/templates/STANDARD.md.template"
+    },
+    ".codebuddy/rules/ai-engineering-standards.md": {
+      "category": "adapter",
+      "owner": "managed",
+      "sha256": "82c55b8fc666169761d10d7ea3fbadf6fbc16ee3777b3599ebcc94d06ead677c",
+      "source": "adapters/workbuddy/rules/ai-engineering-standards.md"
+    },
+    ".codebuddy/skills/architecture-design/SKILL.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "f960d82375146e3683842113b56a5dbc06ad1fe150ef59d535de174b83a02f64",
+      "source": "skills/architecture-design/SKILL.md"
+    },
+    ".codebuddy/skills/architecture-design/assets/decision-template.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "de82ae4590264aa03e39916fb125547f7fca27ce4618056d53387159d06c59fb",
+      "source": "skills/architecture-design/assets/decision-template.md"
+    },
+    ".codebuddy/skills/architecture-design/assets/design-template.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "8dd45815d8409c56453dd87d8ded84e9c56f203c2cb9ad3476e62859b50912c0",
+      "source": "skills/architecture-design/assets/design-template.md"
+    },
+    ".codebuddy/skills/architecture-design/references/evaluation-dimensions.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "4354403cade56cf473e5863411bcc7fd42c01d931d41a1c1287652658deadc52",
+      "source": "skills/architecture-design/references/evaluation-dimensions.md"
+    },
+    ".codebuddy/skills/code-review/SKILL.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "1554944739e342ca476ce5c85655102eeb93824c6ef1ad8c874ac6f4693a089b",
+      "source": "skills/code-review/SKILL.md"
+    },
+    ".codebuddy/skills/code-review/assets/finding-template.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "b0252d3840ce3c40eb3382e55b7aebcb8d91b80a8e58a23cbf2788d706ebca28",
+      "source": "skills/code-review/assets/finding-template.md"
+    },
+    ".codebuddy/skills/code-review/assets/review-report-template.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "0e5eaa432cbc8974920cfe73c62a331d8fe039b8b69fd143cdae70c9b448ddfe",
+      "source": "skills/code-review/assets/review-report-template.md"
+    },
+    ".codebuddy/skills/code-review/references/review-checklist.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "d05fca41c361be979e0920b565362c3c56511ff5e56bba82a79b32ec0ba8911c",
+      "source": "skills/code-review/references/review-checklist.md"
+    },
+    ".codebuddy/skills/project-analysis/SKILL.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "9d8ec12cdfd0087700623ee91a2526992c4c8c2866728718e24db8fcc28c4b58",
+      "source": "skills/project-analysis/SKILL.md"
+    },
+    ".codebuddy/skills/project-analysis/assets/report-template.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "4205b655b6e5e4556651dca4f266d4a4638632ce6de5c422886dc59d2ee08647",
+      "source": "skills/project-analysis/assets/report-template.md"
+    },
+    ".codebuddy/skills/project-analysis/references/analysis-checklist.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "6c58f8441d1d0ce09b40176f5bde368a50d4a255b30ec89820c19e550f3b3e3b",
+      "source": "skills/project-analysis/references/analysis-checklist.md"
+    },
+    ".codebuddy/skills/requirements-analysis/SKILL.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "84a1bead9d99f0e31e931d9c620d0a25a47287cf2310824caa704c447fcfe7e7",
+      "source": "skills/requirements-analysis/SKILL.md"
+    },
+    ".codebuddy/skills/requirements-analysis/assets/requirements-template.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "69ad1ca8be074f697a38735b9e9183e8f1967b0388dbbbb59b63c26078700efb",
+      "source": "skills/requirements-analysis/assets/requirements-template.md"
+    },
+    ".codebuddy/skills/requirements-analysis/references/edge-cases.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "049464daadf982541e5aa93c2088929a18faf03fcc07bf677a7e01140aa9bbd0",
+      "source": "skills/requirements-analysis/references/edge-cases.md"
+    },
+    ".codebuddy/skills/software-development/SKILL.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "74ef8c08a22aa37efe3f9c75b81fc00e9f33cc93564f621448f0d53ca4a2353f",
+      "source": "skills/software-development/SKILL.md"
+    },
+    ".codebuddy/skills/software-development/assets/implementation-report-template.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "feeb38c6271c562b6ea26c34a5f55fc330cfcc543fc5a9543514fd081428c1dc",
+      "source": "skills/software-development/assets/implementation-report-template.md"
+    },
+    ".codebuddy/skills/software-development/references/coding-checklist.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "1f8f2c6fe45a3b21e2e86552280b01f4946308829ad25b8a78a4e0ee286d9812",
+      "source": "skills/software-development/references/coding-checklist.md"
+    },
+    ".codebuddy/skills/software-development/references/verification-checklist.md": {
+      "category": "skill",
+      "owner": "managed",
+      "sha256": "6d1224877f1ea06c27befc382961e8cc513b6d1e109b822215801b61d7d75d7e",
+      "source": "skills/software-development/references/verification-checklist.md"
+    },
+    "CODEBUDDY.md": {
+      "category": "adapter",
+      "owner": "managed",
+      "sha256": "1c4efd88b7a25713fb76ebe5400447d3fabd0f2a92ff0043e413b212211084ef",
+      "source": "adapters/workbuddy/CODEBUDDY.md"
+    }
+  },
+  "generator": "ai-engineering-standards/install.py",
+  "installed_at": "2026-11-11T15:21:44+00:00",
+  "installer_version": "1.0.0",
+  "schema": 1,
+  "scope": "project",
+  "tools": [
+    "workbuddy"
+  ],
+  "version": "1.0.0"
+}

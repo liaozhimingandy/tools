@@ -1,0 +1,241 @@
+/**
+ * 云端同步编排（组合式函数）：串联 Logto 登录态、HTTP 客户端、冲突判据与本地落盘。
+ *
+ * 零知识边界：本层搬运的始终是 {account(items 密文), items(密文), rev} 密封结构，
+ * 不接触主密码、恢复码明文或 vaultKey。上传前无需解锁（密文直传），
+ * 下载覆盖后强制回到「锁定」态，待用户用主密码重新解锁——与备份导入一致。
+ *
+ * 使用：由 useSafeKeep 创建并持有，UI 通过 sk.cloud 访问。
+ */
+import { computed, ref, type Ref } from 'vue'
+import type { StorageAdapter } from '@/services/safekeep/storage.ts'
+import {
+  curRev, getAccount, getItems, getCloudRev, setCloudRev,
+  setCloudSyncAt, getCloudSyncAt,
+} from '@/services/safekeep/storage.ts'
+import {
+  buildCloudBlob, decidePull, decidePush, toRemoteSummary,
+  applyCloudBlob, BlobError, type PushDecision,
+} from '@/services/cloud/sync.ts'
+import { fetchVault, fetchRevision, putVault, CloudError } from '@/services/cloud/client.ts'
+import type { RemoteSummary } from '@/services/cloud/types.ts'
+import { cloudEnabled as cloudEnabledFn } from '@/config.ts'
+import {
+  isConfigured, currentSub, currentAccessToken, displayUser,
+  cachedAuthState, type DisplayUser,
+} from '@/services/auth/logto.ts'
+import type { Account } from '@/services/safekeep/types.ts'
+
+// 设备标识：同一浏览器稳定，用于多端排障（明文元数据，非用户密钥）
+function deviceId(): string {
+  const key = 'sk.device'
+  let id = globalThis.localStorage?.getItem(key)
+  if (!id) {
+    id = 'web-' + Math.random().toString(36).slice(2, 10)
+    try { globalThis.localStorage?.setItem(key, id) } catch { /* 隐私模式忽略 */ }
+  }
+  return id.slice(0, 128)
+}
+
+export interface PushOutcome {
+  ok: boolean
+  message: string
+  /** stale：云端被其他端更新，需要用户选择「拉取」或「强制覆盖」 */
+  stale?: { remote: number; local: number }
+}
+
+export interface PullOutcome {
+  ok: boolean
+  message: string
+  /** 已覆盖本地并需要重新解锁 */
+  needUnlock?: boolean
+}
+
+export function useCloudSync(
+  store: StorageAdapter,
+  deps: {
+    /** 用远端 blob 覆盖本地后，通知上层刷新内存态并回到锁定态 */
+    onApplied: (account: Account) => void
+  },
+) {
+  // 同步读取 main.ts 挂载前 initAuth() 的结果，保证首屏即为正确登录态，不闪屏。
+  const cached = cachedAuthState()
+  const configured = ref(cached ? cached.configured && cloudEnabledFn() : isConfigured() && cloudEnabledFn())
+  const authenticated = ref(cached?.authenticated ?? false)
+  const sub: Ref<string | null> = ref(cached?.sub ?? null)
+  const user: Ref<DisplayUser | null> = ref(null)
+  const busy = ref(false)
+  const lastError = ref('')
+  const cloudRev = ref(getCloudRev(store))
+  const lastSyncedAt = ref(getCloudSyncAt(store))
+  const remoteSummary: Ref<RemoteSummary | null> = ref(null)
+
+  const canSync = computed(() => configured.value && authenticated.value && !!sub.value)
+  const statusText = computed(() => {
+    if (!configured.value) return '仅本地 · 云端未配置'
+    if (!authenticated.value) return '仅本地 · 未登录'
+    return '已登录 · 可云端同步'
+  })
+
+  /** 刷新登录态与用户信息（视图挂载后可调用，或登录态变化时）。 */
+  async function refresh(): Promise<void> {
+    const s = await currentSub()
+    sub.value = s
+    authenticated.value = !!s
+    configured.value = isConfigured() && cloudEnabledFn()
+    user.value = s ? await displayUser() : null
+  }
+  // 首屏若已登录，异步补齐展示信息（昵称/邮箱）
+  if (authenticated.value) void refresh()
+
+  async function login(): Promise<void> {
+    const { signIn } = await import('@/services/auth/logto.ts')
+    await signIn() // 会跳转离开页面
+  }
+  async function logout(): Promise<void> {
+    const { signOut } = await import('@/services/auth/logto.ts')
+    await signOut() // 会跳转离开页面
+  }
+
+  function requireOpts() {
+    if (!sub.value) return null
+    return {
+      userSub: sub.value,
+      getToken: currentAccessToken,
+      device: deviceId(),
+    }
+  }
+
+  /** 拉取远端摘要（拉取前确认用），不改动本地。 */
+  async function inspect(): Promise<RemoteSummary | null> {
+    const opts = requireOpts()
+    if (!opts) {
+      lastError.value = '请先登录再查看云端状态'
+      return null
+    }
+    busy.value = true
+    lastError.value = ''
+    try {
+      const remote = await fetchVault(opts)
+      remoteSummary.value = toRemoteSummary(
+        remote !== null,
+        remote?.blob ?? null,
+        remote ? { revision: remote.revision, updatedAt: remote.updatedAt, device: remote.device } : null,
+      )
+      return remoteSummary.value
+    } catch (e) {
+      lastError.value = friendlyError(e)
+      return null
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /**
+   * 上传本地密文到云端。expected_revision 用本地记录的 cloudRev 做 CAS。
+   * force=true 时以当前远端 revision 为 base 强推（覆盖其他端改动）。
+   */
+  async function push(force = false): Promise<PushOutcome> {
+    if (!canSync.value) return { ok: false, message: '请先登录并配置云端' }
+    const account = getAccount(store)
+    if (!account) return { ok: false, message: '本机还没有保险库，请先创建或拉取云端数据' }
+    const opts = requireOpts()!
+    busy.value = true
+    lastError.value = ''
+    try {
+      const remoteRev = await fetchRevision(opts)
+      const decision: PushDecision = decidePush(remoteRev, cloudRev.value)
+      if (decision.kind === 'stale' && !force) {
+        const msg = '云端已被其他设备更新，请先「从云端拉取」合并；确认要覆盖请用强制上传。'
+        lastError.value = msg
+        return { ok: false, message: msg, stale: { remote: decision.remote, local: decision.local } }
+      }
+      let expected: number
+      if (decision.kind === 'create') expected = 0
+      else if (force) expected = remoteRev ?? 0
+      else if (decision.kind === 'update') expected = decision.base
+      else expected = remoteRev ?? 0 // stale 且未强推：不会再走到这里（上面已 return）
+
+      const blob = buildCloudBlob(account, getItems(store), curRev(store))
+      const res = await putVault(opts, blob, expected)
+      setCloudRev(store, res.revision)
+      setCloudSyncAt(store, Date.now())
+      cloudRev.value = res.revision
+      lastSyncedAt.value = Date.now()
+      const msg = `已加密上传 ${Object.keys(blob.items).length} 条密文到云端（版本 ${res.revision}）`
+      return { ok: true, message: msg }
+    } catch (e) {
+      const msg = friendlyError(e)
+      lastError.value = msg
+      return { ok: false, message: msg }
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /**
+   * 从云端拉取并覆盖本地。任何覆盖都需显式 force（UI 二次确认),
+   * 避免静默丢弃本机较新条目。覆盖后强制重新解锁。
+   */
+  async function pull(force = false): Promise<PullOutcome> {
+    if (!canSync.value) return { ok: false, message: '请先登录并配置云端' }
+    const opts = requireOpts()!
+    busy.value = true
+    lastError.value = ''
+    try {
+      const remote = await fetchVault(opts)
+      if (!remote) return { ok: false, message: '云端还没有同步数据' }
+      const localRev = curRev(store)
+      const decision = decidePull(remote.blob.rev, localRev)
+      if (decision.kind === 'up-to-date' && !force) {
+        return { ok: false, message: '本机与云端版本一致，无需拉取' }
+      }
+      if (decision.kind === 'older' && !force) {
+        const msg = `云端条目版本（${remote.blob.rev}）比本机（${localRev}）更旧，覆盖会丢失本机较新数据；确认请强制拉取。`
+        lastError.value = msg
+        return { ok: false, message: msg }
+      }
+      const account = applyCloudBlob(store, remote.blob)
+      setCloudRev(store, remote.revision)
+      setCloudSyncAt(store, Date.now())
+      cloudRev.value = remote.revision
+      lastSyncedAt.value = Date.now()
+      remoteSummary.value = toRemoteSummary(
+        true, remote.blob,
+        { revision: remote.revision, updatedAt: remote.updatedAt, device: remote.device },
+      )
+      deps.onApplied(account) // 通知上层清空内存明文、锁定、刷新账户显示
+      return { ok: true, message: '已从云端拉取密文并覆盖本机，请用主密码重新解锁', needUnlock: true }
+    } catch (e) {
+      const msg = friendlyError(e)
+      lastError.value = msg
+      return { ok: false, message: msg }
+    } finally {
+      busy.value = false
+    }
+  }
+
+  return {
+    configured, authenticated, sub, user, busy, lastError,
+    cloudRev, lastSyncedAt, remoteSummary, canSync, statusText,
+    refresh, login, logout, inspect, push, pull,
+  }
+}
+
+/** 把底层错误转成面向用户的可读信息，且绝不泄漏 value 内容。 */
+export function friendlyError(e: unknown): string {
+  if (e instanceof CloudError) {
+    if (e.code === 'NOT_CONFIGURED') return '云端同步未配置'
+    if (e.code === 'REVISION_CONFLICT') return '版本冲突：其他设备刚更新过，请拉取后重试'
+    if (e.code === 'VALUE_TOO_LARGE') return '数据超过云端大小上限，请精简条目或导出备份'
+    if (e.code === 'UNAUTHORIZED') return '登录已失效，请重新登录'
+    return e.message || `云端请求失败（${e.status}）`
+  }
+  if (e instanceof BlobError) return `云端数据不可用：${e.message}`
+  if (e instanceof TypeError && /fetch|network|Failed/i.test(e.message)) {
+    return '无法连接云端，请检查网络与 API 地址'
+  }
+  return (e as Error)?.message || '云端同步发生未知错误'
+}
+
+export type CloudSync = ReturnType<typeof useCloudSync>
