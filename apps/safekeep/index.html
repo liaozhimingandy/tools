@@ -570,7 +570,7 @@ function newPlain(){
 function openEditor(existing){
   var p=existing?JSON.parse(JSON.stringify(existing)):newPlain();
   S.editor=p;
-  var types=[['login','登录'],['note','安全笔记'],['card','银行卡'],['wifi','WiFi'],['apikey','API 密钥']];
+  var types=[['login','登录'],['note','安全笔记'],['card','银行卡'],['apikey','API 密钥']];
   openModal('<h3>'+(existing?'编辑条目':'新增条目')+'</h3>'+
     '<p class="mdesc">保存时整条记录（含类型、网址、标签、时间）会一起加密，本地存储里看不到任何明文。</p>'+
     '<div class="grid2"><div><label>类型</label><select id="eType">'+types.map(function(t){return '<option value="'+t[0]+'"'+(p.type===t[0]?' selected':'')+'>'+t[1]+'</option>';}).join('')+'</select></div>'+
@@ -600,7 +600,7 @@ function openEditor(existing){
   };
 }
 
-var TYPE_NAME={login:'登录',note:'安全笔记',card:'银行卡',wifi:'WiFi',apikey:'API 密钥'};
+var TYPE_NAME={login:'登录',note:'安全笔记',card:'银行卡',apikey:'API 密钥'};
 function render(){
   if(!S.vk) return;
   var all=Object.keys(S.plain).map(function(k){ return S.plain[k]; });

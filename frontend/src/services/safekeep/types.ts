@@ -37,7 +37,7 @@ export interface Account {
   lastBackupAt: number | null
 }
 
-export type ItemType = 'login' | 'note' | 'card' | 'wifi' | 'apikey'
+export type ItemType = 'login' | 'note' | 'card' | 'apikey'
 
 export interface ItemFields {
   username?: string

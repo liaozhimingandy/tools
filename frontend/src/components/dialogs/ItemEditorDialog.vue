@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** 条目新增/编辑对话框。业务交给父级 save，本组件只管表单与校验。 */
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { RefreshIcon, BrowseIcon } from 'tdesign-icons-vue-next'
 import { newPlain, cloneItem, TYPE_NAME } from '@/services/safekeep/vault.ts'
 import { genPassword } from '@/services/safekeep/crypto.ts'
@@ -21,8 +21,16 @@ if (!props.target && props.prefill) {
 }
 const showPass = ref(!props.target && !!props.prefill)
 const typeKeys = Object.keys(TYPE_NAME) as ItemType[]
-// 预先把类型名解析成 string[]：避免模板里 Record<ItemType,string> 索引命中泛型组件的 TNode 推断缺陷
-const typeOptions = typeKeys.map((t) => ({ value: t, label: TYPE_NAME[t] }))
+// 预先把类型名解析成 string[]：避免模板里 Record<ItemType,string> 索引命中泛型组件的 TNode 推断缺陷。
+// 兼容被移除的旧类型（如历史 wifi 条目）：编辑旧条目时把它也作为一个可选项保留，
+// 不强制用户改类，避免「打开旧条目→类型变成空/被悄悄改成别的类」。
+const typeOptions = computed(() => {
+  const opts = typeKeys.map((t) => ({ value: t, label: TYPE_NAME[t] }))
+  if (form.type && !typeKeys.includes(form.type)) {
+    opts.push({ value: form.type, label: form.type })
+  }
+  return opts
+})
 
 // TDesign t-input 是泛型组件（T = modelValue 类型）。网址/标签是「数组字段投影成字符串」，
 // 若用 :value + 内联类型化 @change，会让 T 推断成 string|undefined 并级联出错误的类型报错。

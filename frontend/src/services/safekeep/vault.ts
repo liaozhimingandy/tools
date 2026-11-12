@@ -29,7 +29,6 @@ export const TYPE_NAME: Record<PlainItem['type'], string> = {
   login: '登录',
   note: '安全笔记',
   card: '银行卡',
-  wifi: 'WiFi',
   apikey: 'API 密钥',
 }
 
