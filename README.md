@@ -680,10 +680,14 @@ cd backend ; docker compose --env-file .env config
       先加 A 记录指向云主机、配证书、`location /v1/` 转发到 `127.0.0.1:8080`、
       放通 `X-User-Sub`/`Authorization` 与 `OPTIONS` 预检、
       `TOOLS_CORS_ORIGINS=https://www.alsoapp.com`（**前端 origin，不是后端域名**）。
-- [ ] **线上 Logto 回调白名单**（一次性，网页端）：⚠️ 2026-11-12 实测仅
-      `http://localhost:5173/tools/` 被接受（303），`https://www.alsoapp.com/tools/` 与
-      `https://liaozhimingandy.github.io/tools/` 均返回 400。请把
-      **`https://www.alsoapp.com/tools/`** 加入 Redirect URIs 与 Post Logout Redirect URIs
+- [ ] **线上 Logto 回调白名单**（一次性，网页端）：⚠️ **这是公网登录当前唯一剩余阻塞**。
+      2026-11-12 浏览器端到端实测：带 cache-buster 打开新版页面 → 点「登录并从云端恢复」
+      → 跳转 `account.alsoapp.com/oidc/auth?...&redirect_uri=https%3A%2F%2Fwww.alsoapp.com%2Ftools%2F`
+      （**回调值已正确**）→ **HTTP 400**
+      `{"code":"oidc.invalid_redirect_uri","message":"该 redirect_uri 未被此应用注册"}`。
+      探测结果一致：仅 `http://localhost:5173/tools/` 为 303，
+      `https://www.alsoapp.com/tools/` 与 `https://liaozhimingandy.github.io/tools/` 均 400。
+      请把 **`https://www.alsoapp.com/tools/`** 加入 Redirect URIs 与 Post Logout Redirect URIs
       （保留本地地址）。同时确认 Actions Variables 里没有残留旧的
       `VITE_LOGTO_REDIRECT_URI`，否则它会覆盖新的生产默认值。
 - [ ] **CDN 缓存刷新**：见 A.6。部署后在自定义域 CDN 控制台 purge `/tools/`，
