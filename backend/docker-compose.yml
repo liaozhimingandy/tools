@@ -51,7 +51,9 @@ services:
       TOOLS_HOST: 0.0.0.0
       TOOLS_PORT: ${TOOLS_PORT:-8080}
     ports:
-      - "${TOOLS_PORT:-8080}:${TOOLS_PORT:-8080}"
+      # 只绑回环：容器内是裸 HTTP，对外必须经 https://api.alsoapp.com 反代终结 TLS。
+      # 反代在别的机器时，用 .env 的 TOOLS_BIND_ADDR 指定可达网卡，切勿直接暴露公网。
+      - "${TOOLS_BIND_ADDR:-127.0.0.1}:${TOOLS_PORT:-8080}:${TOOLS_PORT:-8080}"
     read_only: true
     tmpfs:
       - /tmp

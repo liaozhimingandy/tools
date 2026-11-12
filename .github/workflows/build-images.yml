@@ -1,0 +1,416 @@
+# =============================================================================
+# tools 后端镜像：构建 + 推送（GHCR 必推，Docker Hub / 阿里云 ACR 可选）
+#
+# 本项目实际情况（与原通用模板不同，改动前务必核对）：
+#   - Dockerfile 在 backend/Dockerfile，构建上下文必须是 ./backend
+#     （COPY requirements.txt / app/ / sql/ 都相对 backend/），不是仓库根。
+#   - 镜像内只有 /app/app/main.py、/app/sql/、/app/requirements.txt；
+#     没有 VERSION 文件、没有 src/、没有前端 dist（前端由 GitHub Pages 托管）。
+#   - 镜像只提供 /v1/* API；容器内是 HTTP :8080，HTTPS 由 api.alsoapp.com
+#     反向代理终结 TLS 后再转到容器，不需要把证书塞进镜像。
+#   - 版本号唯一来源是 backend/app/config.py 的 APP_VERSION，不再依赖 VERSION 文件。
+#
+# 触发：
+#   push main 且 backend/** 或本工作流变化 → dev / sha-xxxxxxx / latest / 0.4.0
+#   workflow_dispatch → 可覆盖版本标签、平台、是否推送
+#
+# 凭据：
+#   GHCR         —— 用 GITHUB_TOKEN + permissions.packages=write，零配置，必定推送。
+#                   公开仓库的 package 默认可能私有，云主机拉取需 docker login。
+#   Docker Hub   —— secrets.DOCKERHUB_USERNAME + secrets.DOCKERHUB_TOKEN
+#                   （兼容老命名 DOCKER_USERNAME / DOCKER_PASSWORD）
+#                   可选 vars.DOCKER_REPOSITORY 覆盖完整 <ns>/<repo>。
+#   阿里云 ACR   —— secrets.ALIYUN_REGISTRY + vars.ALIYUN_NAMESPACE
+#                   + secrets.ALIYUN_USERNAME / ALIYUN_PASSWORD
+#                   （缺失时回退 DOCKER_USERNAME / DOCKER_PASSWORD）
+#   两个外部仓库会先「真实登录一次」探测，凭据无效只跳过并给出 warning，
+#   不会拖垮 GHCR 这条必定可用的通道。
+# =============================================================================
+name: Build Backend Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/build-images.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '额外版本标签（留空=dev；如 0.4.1 会额外打 :0.4.1）'
+        required: false
+        type: string
+        default: ''
+      push:
+        description: '是否推送镜像（关掉则只在 runner 本地构建验证）'
+        required: false
+        type: boolean
+        default: true
+      platforms:
+        description: '目标平台（云主机通常 linux/amd64）'
+        required: false
+        type: string
+        default: 'linux/amd64'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: tools-backend
+  BACKEND_CONTEXT: ./backend
+  BACKEND_DOCKERFILE: ./backend/Dockerfile
+  DEFAULT_PLATFORMS: linux/amd64
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) 版本、平台、凭据可用性（唯一决策点；outputs 不含任何 secret 值）
+  # ---------------------------------------------------------------------------
+  meta:
+    name: 计算版本与凭据
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+      app_version: ${{ steps.calc.outputs.app_version }}
+      short_sha: ${{ steps.calc.outputs.short_sha }}
+      should_push: ${{ steps.calc.outputs.should_push }}
+      platforms: ${{ steps.calc.outputs.platforms }}
+      push_hub: ${{ steps.probe.outputs.push_hub }}
+      push_acr: ${{ steps.probe.outputs.push_acr }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 计算版本与构建参数
+        id: calc
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUSH: ${{ inputs.push }}
+          INPUT_PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          # 版本唯一来源：backend/app/config.py；不读根 VERSION（本项目没有该文件）
+          APP_VERSION="$(sed -n 's/^APP_VERSION = "\([^"]*\)".*/\1/p' backend/app/config.py | head -1)"
+          [ -n "${APP_VERSION}" ] || APP_VERSION="unknown"
+
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION:-dev}"
+            SHOULD_PUSH="${INPUT_PUSH:-true}"
+          else
+            VERSION="dev"
+            SHOULD_PUSH="true"
+          fi
+          # 标签片段必须非空且不含斜杠/空格，否则会拼出非法镜像引用
+          if [ -z "${VERSION}" ] || [[ "${VERSION}" =~ [[:space:]/] ]]; then
+            echo "::error title=版本标签非法::version='${VERSION}'"
+            exit 1
+          fi
+
+          PLATFORMS="${INPUT_PLATFORMS:-${DEFAULT_PLATFORMS}}"
+          # 不推送时用 docker build 本地导出，多平台无法 load，强制单平台
+          if [ "${SHOULD_PUSH}" != "true" ]; then PLATFORMS="linux/amd64"; fi
+
+          {
+            echo "version=${VERSION}"
+            echo "app_version=${APP_VERSION}"
+            echo "short_sha=${SHORT_SHA}"
+            echo "should_push=${SHOULD_PUSH}"
+            echo "platforms=${PLATFORMS}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### 后端镜像构建计划"
+            echo ""
+            echo "| 项目 | 值 |"
+            echo "| --- | --- |"
+            echo "| 版本标签 | \`${VERSION}\` |"
+            echo "| 应用版本 | \`${APP_VERSION}\` |"
+            echo "| commit | \`${SHORT_SHA}\` |"
+            echo "| 平台 | \`${PLATFORMS}\` |"
+            echo "| 推送 | \`${SHOULD_PUSH}\` |"
+            echo "| 构建上下文 | \`${BACKEND_CONTEXT}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # secrets 不能出现在 if: 表达式里，统一经 env 中转；
+      # 真实 docker login 一次，避免无效凭据一路带到 buildx push 才报 401。
+      - name: 探测外部仓库凭据
+        id: probe
+        env:
+          SHOULD_PUSH: ${{ steps.calc.outputs.should_push }}
+          HUB_USER: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKER_USERNAME }}
+          HUB_PASS: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKER_PASSWORD }}
+          ACR_REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
+          ACR_NAMESPACE: ${{ vars.ALIYUN_NAMESPACE || secrets.ALIYUN_NAMESPACE }}
+          ACR_USER: ${{ secrets.ALIYUN_USERNAME || secrets.DOCKER_USERNAME }}
+          ACR_PASS: ${{ secrets.ALIYUN_PASSWORD || secrets.DOCKER_PASSWORD }}
+        run: |
+          set -euo pipefail
+          PUSH_HUB="false"
+          PUSH_ACR="false"
+
+          if [ "${SHOULD_PUSH}" = "true" ]; then
+            if [ -n "${HUB_USER:-}" ] && [ -n "${HUB_PASS:-}" ]; then
+              if printf '%s' "${HUB_PASS}" | docker login docker.io -u "${HUB_USER}" --password-stdin >/dev/null 2>&1; then
+                PUSH_HUB="true"
+                echo "::notice title=Docker Hub 可用::将同步推送到 ${HUB_USER}/${IMAGE_NAME}"
+              else
+                echo "::warning title=Docker Hub 凭据无效::本次跳过 Docker Hub，GHCR 仍会正常推送"
+              fi
+              docker logout docker.io >/dev/null 2>&1 || true
+            else
+              echo "::notice title=跳过 Docker Hub::未配置 DOCKERHUB_USERNAME / DOCKERHUB_TOKEN"
+            fi
+
+            if [ -n "${ACR_REGISTRY:-}" ] && [ -n "${ACR_USER:-}" ] && [ -n "${ACR_PASS:-}" ]; then
+              if [ -z "${ACR_NAMESPACE:-}" ]; then
+                echo "::warning title=跳过阿里云 ACR::缺少 vars.ALIYUN_NAMESPACE（ACR 命名空间必须真实存在，不能猜）"
+              elif printf '%s' "${ACR_PASS}" | docker login "${ACR_REGISTRY}" -u "${ACR_USER}" --password-stdin >/dev/null 2>&1; then
+                PUSH_ACR="true"
+                echo "::notice title=阿里云 ACR 可用::将同步推送到 ${ACR_REGISTRY}/${ACR_NAMESPACE}/${IMAGE_NAME}"
+              else
+                echo "::warning title=阿里云 ACR 凭据无效::本次跳过 ACR，GHCR 仍会正常推送"
+              fi
+              docker logout "${ACR_REGISTRY}" >/dev/null 2>&1 || true
+            else
+              echo "::notice title=跳过阿里云 ACR::未配置 ALIYUN_REGISTRY / 用户名 / 密码"
+            fi
+          fi
+
+          {
+            echo "push_hub=${PUSH_HUB}"
+            echo "push_acr=${PUSH_ACR}"
+          } >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # 2) 构建并推送：一次构建，同时打上各仓库的标签
+  # ---------------------------------------------------------------------------
+  build:
+    name: 构建并推送
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      ghcr_image: ${{ steps.tags.outputs.ghcr_image }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 配置 QEMU（多架构时需要）
+        if: contains(needs.meta.outputs.platforms, 'arm')
+        uses: docker/setup-qemu-action@v3
+
+      - name: 配置 Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 登录 GHCR
+        if: needs.meta.outputs.should_push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 登录 Docker Hub
+        if: needs.meta.outputs.push_hub == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKER_PASSWORD }}
+
+      - name: 登录阿里云 ACR
+        if: needs.meta.outputs.push_acr == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ALIYUN_REGISTRY }}
+          username: ${{ secrets.ALIYUN_USERNAME || secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.ALIYUN_PASSWORD || secrets.DOCKER_PASSWORD }}
+
+      # 镜像名在本作业内现场拼装：含 secret 的字符串不能跨 job 传 output
+      # （GitHub 会静默丢弃「疑似含密钥」的 job output）。
+      - name: 计算镜像名与标签
+        id: tags
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          APP_VERSION: ${{ needs.meta.outputs.app_version }}
+          SHORT_SHA: ${{ needs.meta.outputs.short_sha }}
+          PUSH_HUB: ${{ needs.meta.outputs.push_hub }}
+          PUSH_ACR: ${{ needs.meta.outputs.push_acr }}
+          OWNER: ${{ github.repository_owner }}
+          HUB_USER: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKER_USERNAME }}
+          HUB_REPOSITORY: ${{ vars.DOCKER_REPOSITORY }}
+          ACR_REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
+          ACR_NAMESPACE: ${{ vars.ALIYUN_NAMESPACE || secrets.ALIYUN_NAMESPACE }}
+        run: |
+          set -euo pipefail
+          OWNER_LC="$(printf '%s' "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          GHCR_IMAGE="ghcr.io/${OWNER_LC}/${IMAGE_NAME}"
+
+          REPOS=("${GHCR_IMAGE}")
+          if [ "${PUSH_HUB}" = "true" ]; then
+            if [ -n "${HUB_REPOSITORY:-}" ]; then
+              REPOS+=("${HUB_REPOSITORY}")
+            else
+              REPOS+=("$(printf '%s' "${HUB_USER}" | tr '[:upper:]' '[:lower:]')/${IMAGE_NAME}")
+            fi
+          fi
+          if [ "${PUSH_ACR}" = "true" ]; then
+            REPOS+=("${ACR_REGISTRY}/${ACR_NAMESPACE}/${IMAGE_NAME}")
+          fi
+
+          TAGS=()
+          for repo in "${REPOS[@]}"; do
+            TAGS+=("${repo}:${VERSION}")
+            TAGS+=("${repo}:sha-${SHORT_SHA}")
+            TAGS+=("${repo}:latest")
+            [ "${APP_VERSION}" != "unknown" ] && TAGS+=("${repo}:${APP_VERSION}")
+          done
+          # 去重（dispatch 填的版本可能恰好等于 APP_VERSION）
+          TAGS_TEXT="$(printf '%s\n' "${TAGS[@]}" | sort -u)"
+
+          {
+            echo "tags<<EOF"
+            printf '%s\n' "${TAGS_TEXT}"
+            echo "EOF"
+            echo "ghcr_image=${GHCR_IMAGE}"
+            echo "first_tag=$(printf '%s\n' "${TAGS_TEXT}" | head -1)"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "镜像标签："
+          printf '%s\n' "${TAGS_TEXT}"
+
+      - name: 构建并推送（buildx）
+        if: needs.meta.outputs.should_push == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          # Dockerfile 在 backend/Dockerfile；省略 file 时用默认的
+          # {context}/Dockerfile，避免「file 相对 context 还是相对根」的歧义
+          context: ${{ env.BACKEND_CONTEXT }}
+          push: true
+          platforms: ${{ needs.meta.outputs.platforms }}
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            PYTHON_IMAGE=${{ vars.PYTHON_IMAGE || 'python:3.14-slim' }}
+          labels: |
+            org.opencontainers.image.title=tools-backend
+            org.opencontainers.image.description=tools zero-knowledge config API
+            org.opencontainers.image.version=${{ needs.meta.outputs.app_version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=tools-backend
+          cache-to: type=gha,scope=tools-backend,mode=max
+          provenance: false
+          sbom: false
+
+      - name: 仅本地构建（不推送）
+        if: needs.meta.outputs.should_push != 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tags.outputs.first_tag }}"
+          echo "本地构建标签：${TAG}"
+          docker build \
+            --build-arg "PYTHON_IMAGE=${{ vars.PYTHON_IMAGE || 'python:3.14-slim' }}" \
+            --file "${BACKEND_DOCKERFILE}" --tag "${TAG}" "${BACKEND_CONTEXT}"
+          docker image inspect "${TAG}" >/dev/null
+          echo "本地镜像构建成功：${TAG}"
+
+  # ---------------------------------------------------------------------------
+  # 3) 真实拉起容器验 /v1/health（镜像内是 memory store，不依赖云数据库）
+  # ---------------------------------------------------------------------------
+  verify:
+    name: 拉取并冒烟
+    needs: [meta, build]
+    if: needs.meta.outputs.should_push == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 校验镜像内容与 /v1 接口
+        env:
+          REF: ${{ needs.build.outputs.ghcr_image }}:sha-${{ needs.meta.outputs.short_sha }}
+        run: |
+          set -euo pipefail
+          docker pull "${REF}"
+
+          # 镜像内文件布局按 backend/Dockerfile：app/、sql/、requirements.txt
+          docker run --rm --entrypoint sh "${REF}" -c \
+            'test -f /app/app/main.py && test -f /app/app/config.py && test -f /app/sql/001_tool_configs.sql && test -f /app/requirements.txt'
+          echo "镜像内文件布局校验通过"
+
+          CID="$(docker run -d --rm -p 18080:8080 "${REF}")"
+          trap 'docker stop "${CID}" >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:18080/v1/health >/tmp/health.json 2>/dev/null; then break; fi
+            sleep 1
+          done
+          cat /tmp/health.json
+          curl -fsS http://127.0.0.1:18080/v1/version
+          echo ""
+          echo "容器 /v1/health 与 /v1/version 冒烟通过"
+
+  # ---------------------------------------------------------------------------
+  # 4) 汇总（含云主机可直接复制的拉取命令）
+  # ---------------------------------------------------------------------------
+  report:
+    name: 构建报告
+    needs: [meta, build, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 写入摘要
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          APP_VERSION: ${{ needs.meta.outputs.app_version }}
+          SHORT_SHA: ${{ needs.meta.outputs.short_sha }}
+          GHCR_IMAGE: ${{ needs.build.outputs.ghcr_image }}
+          PUSH_HUB: ${{ needs.meta.outputs.push_hub }}
+          PUSH_ACR: ${{ needs.meta.outputs.push_acr }}
+          R_META: ${{ needs.meta.result }}
+          R_BUILD: ${{ needs.build.result }}
+          R_VERIFY: ${{ needs.verify.result }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## 后端镜像构建报告"
+            echo ""
+            echo "| 项目 | 值 |"
+            echo "| --- | --- |"
+            echo "| 版本标签 | \`${VERSION}\` |"
+            echo "| 应用版本 | \`${APP_VERSION}\` |"
+            echo "| GHCR | \`${GHCR_IMAGE}:sha-${SHORT_SHA}\` |"
+            echo "| Docker Hub | ${PUSH_HUB} |"
+            echo "| 阿里云 ACR | ${PUSH_ACR} |"
+            echo "| 阶段结果 | meta=${R_META} build=${R_BUILD} verify=${R_VERIFY} |"
+            echo ""
+            echo '```bash'
+            echo "# 云主机（HTTPS 反代 api.alsoapp.com → 127.0.0.1:8080）"
+            echo "docker login ghcr.io -u <github-user> -p <PAT:read:packages>"
+            echo "docker pull ${GHCR_IMAGE}:sha-${SHORT_SHA}"
+            echo '```'
+            echo ""
+            echo "> 部署建议固定 \`sha-<commit>\` 或具体版本，不要长期依赖 \`latest\`。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${R_META}" = "failure" ] || [ "${R_BUILD}" = "failure" ] || [ "${R_VERIFY}" = "failure" ]; then
+            echo "::error title=后端镜像构建失败::请查看 meta / build / verify 作业日志"
+            exit 1
+          fi

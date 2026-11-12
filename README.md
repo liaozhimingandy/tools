@@ -25,23 +25,27 @@
 ## 部署拓扑（当前阶段）
 
 ```
-浏览器 ──HTTPS──> GitHub Pages（纯静态，/tools/ 子路径，hash 路由）
-   │                    │ 构建期内联 VITE_*（API 地址 / Logto 配置）
+浏览器 ──HTTPS──> GitHub Pages  https://liaozhimingandy.github.io/tools/
+   │                    │ 构建期内联 VITE_*（全 HTTPS，构建前强制校验）
    │                    └─ 静态资源 /tools/assets/*
    │
-   └──HTTPS CORS──> 云服务器容器（FastAPI :8080，域名 + HTTPS 反代）
+   └──HTTPS CORS──> https://api.alsoapp.com
+                          │  Nginx / 云 LB 终结 TLS → 127.0.0.1:8080（容器内是 HTTP）
                           │  TOOLS_AUTH_MODE=passthrough（暂时不鉴权）
-                          └─ 外部托管 PostgreSQL（PgBouncer :6432）
+                          └─ 外部托管 PostgreSQL 18.3（:6432 直连）
 
-   Logto（统一认证）── OAuth2 回调落在 https://<账号>.github.io/tools/（无 #）
+   Logto https://account.alsoapp.com ── 回调落在
+        https://liaozhimingandy.github.io/tools/（无 #）
 ```
 
 - **前端**：GitHub Actions 推 `main` 自动 `npm ci && npm run build` 部署到 Pages；
   `base=/tools/`，路由用 hash 模式（`/tools/#/safekeep`），刷新子路径不 404，
   Logto 回调（`redirect_uri` 禁止带 `#`）落到站点根 `/tools/`，挂载前由 `main.ts` 消费 `code/state`。
-- **后端**：容器化部署在云主机，对外必须 **域名 + HTTPS**（Pages 是 HTTPS，若后端走 HTTP
-  会被浏览器 Mixed Content 拦截）。前置 Nginx/Caddy 等反代终结 TLS 后转到容器 `:8080`。
-- **数据库**：外部托管 PostgreSQL，走 PgBouncer 连接池（`:6432`），密码含特殊字符需 URL 编码。
+- **后端**：容器化部署在云主机，对外域名固定 **`https://api.alsoapp.com`**。
+  全部链路 HTTPS：Pages 是 HTTPS，若后端走 HTTP 会被浏览器 Mixed Content 拦截。
+  TLS 在 Nginx/Caddy/云负载均衡终结后转 `127.0.0.1:8080`，证书不进镜像。
+- **数据库**：外部托管 PostgreSQL 18.3（实测 `:6432` 是直连端口，不是 PgBouncer），
+  密码含特殊字符需 URL 编码。
 - **鉴权阶段**：后端暂时 `passthrough`——信任前端声明的 `X-User-Sub`，前端自行判断是否已登录，
   有 Logto 登录信息才允许云端同步。**这是过渡态，正式多用户上线前必须切 `logto`**，风险见下文。
 
@@ -55,7 +59,8 @@ tools/
 ├── .ai-standards/             # 工程规范镜像（唯一规范来源，安装器托管）
 ├── .codebuddy/                # 项目级规则 + Skills（安装器托管）
 ├── .github/workflows/
-│   └── deploy-pages.yml       # 推 main 自动构建前端并部署 GitHub Pages
+│   ├── deploy-github-pages.yml # 推 main 构建前端并部署 Pages（内置全 HTTPS 生产默认值 + 校验）
+│   └── build-images.yml       # 推 main(backend/**) 构建后端镜像推 GHCR / 可选 Hub·ACR
 ├── frontend/                  # Vue 3 SPA（TDesign + Tailwind v4）
 │   ├── src/config.ts          # 构建期 VITE_* 统一读取 + 未配置降级
 │   ├── src/services/safekeep/ # 加密/存储/业务编排（零 DOM，可 Node 直测）
@@ -69,7 +74,8 @@ tools/
 │   └── dist/                  # vite build 产物（gitignore；本地可由后端托管 / Pages 部署）
 ├── backend/                   # FastAPI
 │   ├── Dockerfile             # 非 root 运行时镜像（支持 --build-arg 换基础镜像加速）
-│   ├── docker-compose.yml     # init-db 一次性迁移 + api 服务
+│   ├── docker-compose.yml     # 源码构建：init-db 一次性迁移 + api 服务
+│   ├── docker-compose.image.yml # 云主机：直接拉 GHCR 镜像，端口只绑回环
 │   ├── .env.example           # 全部部署变量模板（真实 .env 被 gitignore）
 │   ├── .dockerignore
 │   ├── app/
@@ -195,7 +201,7 @@ tools/
 
 > **接口前缀统一为 `/v1`，没有 `/api` 段**：`/v1/health`、`/v1/version`、
 > `/v1/auth/mode`、`/v1/tools`、`/v1/configs/*`。`VITE_API_BASE_URL` 只填域名
-> （如 `https://api.example.com`），路径由 `services/cloud/client.ts` 拼接。
+> （生产 `https://api.alsoapp.com`），路径由 `services/cloud/client.ts` 拼接。
 > 旧 `/api/*` 不再注册任何接口，请求会落到 SPA 回退。
 
 | 方法 | 路径 | 说明 |
@@ -242,18 +248,26 @@ tools/
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `VITE_PUBLIC_PATH` | `/tools/` | Vite `base`；仓库名不是 `tools` 或绑自定义域根路径时改这里 |
-| `VITE_API_BASE_URL` | 空 | **唯一需你填的项**：后端 HTTPS 根（不含尾斜杠）；空=可登录但暂不能上传/下载 |
+| `VITE_API_BASE_URL` | `https://api.alsoapp.com` | 后端 HTTPS 根（不含尾斜杠）；空=可登录但暂不能上传/下载 |
 | `VITE_LOGTO_ENDPOINT` | `https://account.alsoapp.com` | Logto endpoint，已内联公开默认值；换租户才需覆盖 |
 | `VITE_LOGTO_APP_ID` | `0z2t6jrnf4z9lzy4miusg` | Logto 应用 ID（Public Client，非密钥），已内联；换应用才需覆盖 |
 | `VITE_LOGTO_RESOURCE` | 空 | 可选，API resource（拿 access token 的 audience） |
-| `VITE_LOGTO_REDIRECT_URI` | 自动拼站点根 | OAuth 回调白名单地址（**无 `#`**），如 `https://<账号>.github.io/tools/`；一般无需填 |
+| `VITE_LOGTO_REDIRECT_URI` | `https://liaozhimingandy.github.io/tools/` | OAuth 回调白名单地址（**无 `#`**）；一般无需填 |
 | `VITE_LOGTO_POST_LOGOUT_REDIRECT_URI` | 同回调 | 登出回跳 |
 | `VITE_LOGTO_SCOPES` | 空 | 逗号分隔的额外 scopes |
 
-> 以上 `VITE_*` 会内联进浏览器 JS，本就公开可见，故用 Actions **Variables**（非 Secret）即可。
-> **登录默认开箱可用**：Logto endpoint/appId 已内联（公共客户端标识，官方示例也明文写在前端，
-> 不含 secret）；即使一个 `VITE_*` 都不配，部署后也能登录，只是后端地址未填时云端读写会给出提示。
-> 加解密与本地功能始终离线可用，绝不白屏。
+> 上表「默认」是 **`.github/workflows/deploy-github-pages.yml` 内置的生产默认值**，
+> 用 `vars.X || 默认值` 注入，因此**一个 Actions Variable 都不配也能全 HTTPS 上线**。
+> 如需覆盖，在 `Settings > Secrets and variables > Actions > Variables` 填同名变量即可；
+> 构建前有校验步骤强制 `VITE_API_BASE_URL` / `VITE_LOGTO_ENDPOINT` / 回调 / 登出回跳
+> 四个值都必须是 `https://`，任何遗留的 `http://` 旧值会直接让工作流失败，不产出混合内容页面。
+> 以上 `VITE_*` 会内联进浏览器 JS，本就公开可见，故用 **Variables**（非 Secret）即可。
+> 本地 dev 仍走 `frontend/.env.development.local` 的 `http://localhost:*`，该文件只在
+> `vite dev` 加载、不参与 production build，不受 HTTPS 校验影响。
+
+> **不覆写线上产物的小陷阱**：若 Variables 里曾为本地测试填过
+> `VITE_LOGTO_REDIRECT_URI=http://localhost:5173/tools/`，它仍会覆盖默认值并让工作流失败。
+> 上线前请到 Variables 里删掉或改成线上 HTTPS 地址。
 
 > **不建 users 表**：`user_sub` 即 Logto `sub`；昵称/头像/邮箱由前端从 Logto 取，后端不落库。
 
@@ -262,55 +276,125 @@ tools/
 1. **仓库**：把本项目推到 GitHub（仓库名决定 Pages 子路径；默认 `tools` → `/tools/`，
    若改名须同步设 `VITE_PUBLIC_PATH=/<新名>/`）。本地分支名为 `main`（与工作流触发分支一致）。
 2. **开启 Pages**：仓库 `Settings > Pages > Build and deployment > Source` 选 **GitHub Actions**。
-3. **配置 Variables**（`Settings > Secrets and variables > Actions > Variables`）：
-   - `VITE_API_BASE_URL`：填后端 HTTPS 域名（后端就绪后；见「部署 B」）。**当前唯一必填项**。
-   - Logto 三件套已内联默认值，可不填；换租户/应用时才用 `VITE_LOGTO_ENDPOINT` / `VITE_LOGTO_APP_ID` 覆盖。
-4. **Logto 后台加回调白名单**（一次性）：在 Logto 控制台该应用 → Redirect URIs 加入
-   `https://<账号>.github.io/tools/`（**无 `#`**），Post Logout Redirect URIs 同理。
-   否则登录会报 `redirect_uri` 未注册。本地 dev 另加 `http://localhost:5173/`。
-5. **自动部署**：推 `main`（或手动 Run workflow）触发 `.github/workflows/deploy-pages.yml`：
-   `npm ci` → `npm run build`（含 `vue-tsc` 类型检查）→ 上传 `frontend/dist` → 部署 Pages。
+3. **Variables 已可零配置**：`deploy-github-pages.yml` 内置
+   `VITE_API_BASE_URL=https://api.alsoapp.com`、回调/登出均为
+   `https://liaozhimingandy.github.io/tools/`，Logto endpoint/appId 内联在 `src/config.ts`。
+   只有换域名/租户/应用时才需要到 `Settings > Secrets and variables > Actions > Variables` 覆盖。
+   ⚠️ 若里面还留着本地测试用的 `http://localhost:5173/tools/`，构建会被 HTTPS 校验拦下，先删掉。
+4. **Logto 后台加回调白名单**（一次性，网页端）：在该应用 → Redirect URIs 加入
+   `https://liaozhimingandy.github.io/tools/`（**无 `#`**），Post Logout Redirect URIs 同理，
+   否则线上登录报 `oidc.invalid_redirect_uri`。本地 dev 另加 `http://localhost:5173/tools/`，
+   两者可共存（不要为了本地测试删掉线上地址）。
+5. **自动部署**：推 `main`（或手动 Run workflow）触发
+   `.github/workflows/deploy-github-pages.yml`：
+   校验全 HTTPS → `npm ci` → `npm run build`（含 `vue-tsc` 类型检查）→ 上传 `frontend/dist` → 部署 Pages。
    产物资源路径为 `/tools/assets/*`，路由为 hash（`/tools/#/safekeep`），刷新子路径不 404。
 
 > 工作流只监听 `frontend/**` 与自身变动；改 Actions Variables 后需手动 Run workflow 才重新内联。
 
-## 部署 B：后端到云主机容器
+## 部署 B：后端镜像 → 云主机（`https://api.alsoapp.com`）
 
 > 真实数据库口令/IP **只写入 gitignore 的 `backend/.env`**，仓库内 `.env.example` 全是占位符；
-> 切勿把口令提交进仓库（本仓库会推到 GitHub）。
+> 切勿把口令提交进仓库（本仓库公开）。
+> **全 HTTPS**：容器内仍是裸 HTTP `:8080`、只绑回环；TLS 由 `api.alsoapp.com` 的
+> Nginx / 云负载均衡终结后转发，证书不进镜像。
 
-1. **建库 + 建表**（`init-db` 容器会自动做，也可手动执行一次）：
-   ```bash
-   PGPASSWORD='<pass>' psql -h <host> -p 6432 -U tools -d tools -v ON_ERROR_STOP=1 -f sql/001_tool_configs.sql
-   ```
-   > `001` 幂等，已含完整表结构 + 索引 + 种子 + `FORCE ROW LEVEL SECURITY`。
-   > ⚠️ 应用 DSN 必须是**非超级用户、不带 `BYPASSRLS`** 的角色（本部署 `tools` 账号即满足，
-   > RLS 已实测生效）；`postgres` 超级用户会绕过全部行级安全策略。
-   > `002_app_role.sql` / `003_migration.sql` 需要 `CREATEROLE` 并引用 `tools_app` 角色，
-   > 本云库账号无该权限，故**默认不执行**；仅「有管理员权限且确有 v0.2 旧库要升级」时手动跑。
-2. **填 `.env`**：`cp .env.example .env`，填 `TOOLS_PG_HOST` / `PORT` / `NAME` / `USER` / `PASSWORD`、
-   `TOOLS_CORS_ORIGINS=https://<账号>.github.io`（若用自定义域则填该域，**只填 origin、不带路径**）、
-   `TOOLS_PUBLIC_PATH`（容器若也托管 dist 才需，与前端一致）。
-3. **起容器**：
-   ```bash
-   docker compose up -d --build
-   docker compose logs -f init-db    # 核对 001 建表有无报错
-   ```
-   `init-db` 幂等执行 `001_tool_configs.sql`（`ON_ERROR_STOP=1`），成功后 `api` 才启动；
-   api 以非 root 运行、只读文件系统、`/tmp` 为 tmpfs。
-   国内云主机若拉不到 Docker Hub，构建时加：
-   `docker compose build --build-arg PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.14-slim`
-   （在 compose 的 `build.args.PYTHON_IMAGE` 配同值亦可，见 `Dockerfile` 顶部说明）。
-4. **域名 + HTTPS 反代（必需）**：Pages 是 HTTPS，浏览器会拦截其到 `http://` 后端的请求
-   （Mixed Content）。用 Nginx/Caddy/云负载均衡在后端容器前终结 TLS，把
-   `https://api.<你的域>` 反代到 `127.0.0.1:8080`，并放通 `X-User-Sub`、`Authorization` 头与
-   `OPTIONS` 预检。前端 `VITE_API_BASE_URL` 填这个 HTTPS 域名。
+### B1. 构建镜像（`.github/workflows/build-images.yml`）
+
+`push main` 且 `backend/**` 或该工作流本身变动时触发，也可手动 Run workflow
+（可指定额外版本标签、平台、是否推送）。
+
+| 项 | 值 |
+| --- | --- |
+| 构建上下文 | `./backend`（`backend/Dockerfile`，**不是仓库根**） |
+| 默认镜像 | `ghcr.io/liaozhimingandy/tools-backend` |
+| 标签 | `:dev`、`:sha-<7位commit>`、`:latest`、`:<APP_VERSION>`（当前 `0.4.0`） |
+| 凭据 | GHCR 用仓库自带 `GITHUB_TOKEN` + `packages: write`，**零配置必推** |
+| 可选同步推 | Docker Hub：`DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`；阿里云 ACR：`ALIYUN_REGISTRY` + `vars.ALIYUN_NAMESPACE` + 账号密码。配错的凭据只跳过并告警，不拖垮 GHCR |
+| 推送后校验 | 拉起容器验镜像内 `/app/app/main.py`、`/app/sql/001_tool_configs.sql`，并请求 `/v1/health` 与 `/v1/version` |
+
+> ⚠️ 原先那份 `build-images.yml` 是从别的项目（`fastapi_tuiwen`）拷来的通用模板，
+> 在本项目会**直接失败**：用仓库根 `Dockerfile`（本项目在 `backend/`）、
+> 依赖不存在的 `.github/actions/resolve-image` 与根 `VERSION` 文件、
+> `paths` 只监听 `src/**`（本项目是 `backend/app/**`，推 main 根本不触发）、
+> 校验镜像里不存在的 `/app/src/tuiwen`、镜像名也是 `fastapi_tuiwen`。
+> 现已按本项目真实结构重写，并去掉用不到的 Django tag/stable 分支发版模型。
+
+### B2. 云主机起容器
+
+```bash
+# 0) 一次性：建库 + 建表（两份 compose 的 init-db 会自动做，也可手动执行）
+PGPASSWORD='<pass>' psql -h <host> -p 6432 -U tools -d tools \
+  -v ON_ERROR_STOP=1 -f sql/001_tool_configs.sql
+
+# 1) 填 env：cp .env.example .env
+#    TOOLS_PG_HOST/PORT/NAME/USER/PASSWORD、TOOLS_CORS_ORIGINS、
+#    TOOLS_IMAGE=ghcr.io/liaozhimingandy/tools-backend:sha-<7位commit>（固定版本，勿用 latest）
+# 2) 登录 GHCR（把 package 设为 public 后可跳过）
+docker login ghcr.io -u <github-user> -p <PAT:read:packages>
+# 3) 拉现成镜像部署（推荐，云主机不编译）
+docker compose -f docker-compose.image.yml up -d
+docker compose -f docker-compose.image.yml logs -f init-db   # 核对 001 有无报错
+curl -sS http://127.0.0.1:8080/v1/health
+```
+
+`docker-compose.image.yml` 用 `image` 而非 `build`，端口只绑 `${TOOLS_BIND_ADDR:-127.0.0.1}`；
+`docker-compose.yml` 保留源码构建路径（`docker compose up -d --build`），同样已收敛到回环。
+`init-db` 幂等执行 `001_tool_configs.sql`（`ON_ERROR_STOP=1`），成功后 `api` 才启动；
+api 以非 root 运行、只读文件系统、`/tmp` 为 tmpfs。
+`001` 已含完整表结构 + 索引 + 种子 + `FORCE ROW LEVEL SECURITY`；应用 DSN 必须是
+**非超级用户、不带 `BYPASSRLS`** 的角色（`tools` 账号满足，RLS 已实测生效）。
+`002/003` 默认不执行，理由见上文「云托管库实测补充」。
+国内云主机若拉不到 Docker Hub 基础镜像，源码构建时加
+`--build-arg PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.14-slim`
+（Actions 里用 `vars.PYTHON_IMAGE` 覆盖）。
+
+### B3. HTTPS 反代 + CORS（必需）
+
+Pages 是 HTTPS，浏览器会拦截其到 `http://` 后端的请求（Mixed Content）。
+在 `api.alsoapp.com` 终结 TLS，只把 `/v1/` 转发给容器：
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name api.alsoapp.com;
+    ssl_certificate     /etc/letsencrypt/live/api.alsoapp.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.alsoapp.com/privkey.pem;
+
+    location /v1/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        # X-User-Sub / Authorization / OPTIONS 预检默认透传，不要在反代层丢弃；
+        # CORS 头由后端 CORSMiddleware 返回，反代不要再 add_header 造成重复。
+    }
+    location / { return 404; }   # 镜像内没有 dist，静态资源由 Pages 提供
+}
+server { listen 80; server_name api.alsoapp.com; return 301 https://$host$request_uri; }
+```
+
+`.env` 里 `TOOLS_CORS_ORIGINS=https://liaozhimingandy.github.io`
+（**只填前端 origin，不带路径、不带尾斜杠；不是填后端域名**）。
+若还要本地联调，可追加 `,http://localhost:5173`，两者共存。
+
+验证：
+
+```bash
+curl -i https://api.alsoapp.com/v1/health
+curl -i -X OPTIONS https://api.alsoapp.com/v1/configs/safekeep/vault \
+  -H 'Origin: https://liaozhimingandy.github.io' \
+  -H 'Access-Control-Request-Method: GET' \
+  -H 'Access-Control-Request-Headers: x-user-sub,content-type'
+```
+
+预检应返回 `Access-Control-Allow-Origin: https://liaozhimingandy.github.io`。
 
 ## 部署 C：Logto 配置
 
 1. 在 Logto 控制台建 **Single Page App**，把**所有需要登录的部署地址**逐一加入 Redirect URI
    与 Post-logout URI 白名单（**必须无 `#`**，Logto 对 redirect_uri 做精确匹配）：
-   - 线上：`https://<账号>.github.io/tools/`（绑自定义域则用 `https://<域>/tools/`）
+   - 线上：`https://liaozhimingandy.github.io/tools/`（绑自定义域则用 `https://<域>/tools/`）
    - 本地联调：`http://localhost:5173/tools/`
    - ⚠️ 实测：**`localhost` 与 `127.0.0.1` 是两个不同 origin**，`/` 与 `/tools/` 也是两个不同 URI。
      只配 `http://localhost:5173/` 而页面落在 `/tools/`，会直接报
@@ -319,7 +403,8 @@ tools/
      Logto 支持多 URI，**新增本地地址时不要删线上地址**。可在改完后用
      `GET <endpoint>/oidc/auth?...&redirect_uri=<候选>` 探测：303 跳转登录页=已允许，400=未配置。
 2. endpoint / app id 已内联为公开默认值（非密钥），可用 Actions Variables
-   （`VITE_LOGTO_ENDPOINT` / `VITE_LOGTO_APP_ID`）覆盖；`VITE_LOGTO_REDIRECT_URI` 建议显式固定，
+   （`VITE_LOGTO_ENDPOINT` / `VITE_LOGTO_APP_ID`）覆盖；`VITE_LOGTO_REDIRECT_URI` 与
+   Post Logout URI 已由 `deploy-github-pages.yml` 显式固定为线上 HTTPS 地址，
    避免不同 host 打开时自动拼装出未登记的地址。
 3. 当前阶段前端 Logto 只用来拿 `sub` 作云端归属；后端仍是 `passthrough` 不验签。
    正式切后端验签时，另建 API resource 并把 issuer/audience/JWKS 三件套填入后端 `.env`，
@@ -517,7 +602,11 @@ cd backend ; docker compose --env-file .env config
 ```
 
 **当前基线**：前端 `63/63` 单测、`vue-tsc` 类型检查、`vite build` 全绿；
-后端 `73/73` unittest 全绿；`docker compose config` 渲染通过；
+后端 `73/73` unittest 全绿；两份 `docker compose config` 渲染通过；
+两个 workflow 的 YAML 解析 + 12 项工程结构一致性检查通过；
+按 Pages workflow 的生产变量重建产物后扫描：含
+`https://api.alsoapp.com` / `https://liaozhimingandy.github.io/tools/`，
+**0 处** `localhost` / `127.0.0.1` / `http://api`（残留 `http://` 均为 SVG/W3C XML 命名空间）；
 **真实云数据库 `/v1` 端到端 19/19 通过** + 浏览器冷启动恢复闭环通过
 （见「本地端到端联调」表格）。
 
@@ -530,20 +619,25 @@ cd backend ; docker compose --env-file .env config
       （首次部署需在 Settings > Pages 把 Source 选为 GitHub Actions，已实测为唯一阻塞点。）
 - [x] **本地登录跳转 + 回调归位**：Edge 实测点击「登录并从云端恢复」跳到 Logto 登录页、
       `signInSession.redirectUri` 正确、恢复意图写入、伪造回调落地后归位 `#/safekeep` 且不误覆盖。
-- [ ] **容器镜像构建**：`docker compose up -d --build`。本环境无法拉取 Docker Hub 镜像
-      （`python:3.14-slim`），已加 `ARG PYTHON_IMAGE` 支持国内镜像加速，需云主机实测。
-- [ ] **HTTPS 反代 + CORS**：域名证书、反代放通自定义头/OPTIONS 预检、Pages 源在
-      `TOOLS_CORS_ORIGINS` 白名单内，浏览器无 Mixed Content / CORS 报错。
+- [ ] **云主机拉取镜像并起容器**：`build-images.yml` 已在 Actions 构建推送到 GHCR；
+      需在云主机实测 `docker login ghcr.io` → `docker pull ...:sha-<commit>` →
+      `docker compose -f docker-compose.image.yml up -d` → `/v1/health` 200。
+      本机无法拉取 `python:3.14-slim`，故源码构建路径仍需云主机实测
+      （已加 `ARG PYTHON_IMAGE` 支持国内镜像加速）。
+- [ ] **`api.alsoapp.com` HTTPS 反代 + CORS**：证书、`location /v1/` 转发到
+      `127.0.0.1:8080`、放通 `X-User-Sub`/`Authorization` 与 `OPTIONS` 预检、
+      `TOOLS_CORS_ORIGINS=https://liaozhimingandy.github.io`；浏览器无 Mixed Content / CORS 报错。
 - [ ] **线上 Logto 回调白名单**（一次性，网页端）：⚠️ 实测当前白名单只剩
-      `http://localhost:5173/tools/`，**线上 `https://<账号>.github.io/tools/` 已被移除**，
+      `http://localhost:5173/tools/`，**线上 `https://liaozhimingandy.github.io/tools/` 已被移除**，
       线上登录会报 `oidc.invalid_redirect_uri`。请把线上地址加回 Redirect URIs 与
       Post Logout Redirect URIs（保留本地地址，二者可共存）。
 - [ ] **真实 Logto 账号完成一次登录**：本环境无账号凭据；Edge 已实测能跳到
       `account.alsoapp.com/sign-in` 登录页、回调 URL 归一化与意图续做也有单测覆盖，
       仍需本人用真实账号登录，确认 `sub` 落地、登出正常。
-- [ ] **填后端地址后端到端云同步**：先在 Settings > Variables 配 `VITE_API_BASE_URL` 重部署，
-      再验「检查云端 → 上传 → 另一设备拉取 → 主密码重新解锁」密文不失真，
-      冲突时 `stale`/强制覆盖提示符合预期。
+- [ ] **线上端到端云同步**：`VITE_API_BASE_URL=https://api.alsoapp.com` 已内置到
+      `deploy-github-pages.yml`，重部署后验「检查云端 → 上传 → 另一设备拉取 →
+      主密码重新解锁」密文不失真，冲突时 `stale`/强制覆盖提示符合预期。
+      ⚠️ 若 Actions Variables 里仍留着 `http://` 旧值，构建会被 HTTPS 校验拦下，需先删除。
 - [ ] **冷启动云端恢复全链路（真实登录）**：新设备/清浏览器后，解锁页点「登录并从云端恢复」→
       Logto 跳转 → 回调落站点根 → 自动回 `#/safekeep` 并拉一次密文 → 主密码解锁；
       验证普通刷新不会重复拉取/覆盖（恢复意图仅消费一次、TTL 10 分钟）。

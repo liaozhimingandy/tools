@@ -3,17 +3,20 @@
 # 前提：仓库 Settings > Pages > Build and deployment > Source 选 "GitHub Actions"。
 #
 # 需要的仓库变量/密钥（Settings > Secrets and variables > Actions）：
-#   Variables（非敏感，可明文）：
-#     VITE_API_BASE_URL                 后端 HTTPS 根，如 https://api.example.com
-#     VITE_LOGTO_ENDPOINT               Logto endpoint
-#     VITE_LOGTO_APP_ID                 Logto 应用 ID
+#   Variables（非敏感，可明文；均可用 vars 覆盖，未配时用下方内置生产默认值）：
+#     VITE_API_BASE_URL                 后端 HTTPS 根，默认 https://api.alsoapp.com
+#     VITE_LOGTO_ENDPOINT               Logto endpoint，默认 https://account.alsoapp.com
+#     VITE_LOGTO_APP_ID                 Logto 应用 ID（代码内已内联公开默认值）
 #     VITE_LOGTO_RESOURCE               (可选) API resource
-#     VITE_LOGTO_REDIRECT_URI           回调白名单地址（无 fragment），如 https://<user>.github.io/tools/
-#     VITE_LOGTO_POST_LOGOUT_REDIRECT_URI (可选) 登出回跳
+#     VITE_LOGTO_REDIRECT_URI           回调白名单地址（无 fragment），
+#                                      默认 https://liaozhimingandy.github.io/tools/
+#     VITE_LOGTO_POST_LOGOUT_REDIRECT_URI (可选) 登出回跳，同回调
 #     VITE_LOGTO_SCOPES                 (可选) 逗号分隔额外 scopes
 #     VITE_PUBLIC_PATH                  Pages 子路径，默认 /tools/（仓库名不是 tools 时改这里）
 #   ——这些值会内联进前端 JS，本就对浏览器可见，故用 Variables 即可，不是密钥。
-#   若任一 VITE_LOGTO_* 或 VITE_API_BASE_URL 缺失，前端自动降级为纯本地，不会白屏。
+#   生产「全 HTTPS」是硬约束：构建前会校验 API 根 / Logto endpoint / 回调地址
+#   一律为 https://，任何 http:// 旧 Variable 会直接让工作流失败，不会产出混合内容页面。
+#   本地 dev 不受影响：frontend/.env.development.local 只在 vite dev 生效，不参与本构建。
 
 name: Deploy Frontend to Pages
 
@@ -58,17 +61,41 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      # 生产全 HTTPS：这里用「Variables 优先 + 内置默认值」得到最终值，
+      # 并在构建前拦截 http://，防止旧 Variable 造出 Mixed Content 页面。
+      - name: 校验生产地址均为 HTTPS
+        env:
+          API_BASE: ${{ vars.VITE_API_BASE_URL || 'https://api.alsoapp.com' }}
+          LOGTO_ENDPOINT: ${{ vars.VITE_LOGTO_ENDPOINT || 'https://account.alsoapp.com' }}
+          REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI || 'https://liaozhimingandy.github.io/tools/' }}
+          LOGOUT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI || 'https://liaozhimingandy.github.io/tools/' }}
+        run: |
+          set -euo pipefail
+          for pair in "VITE_API_BASE_URL=${API_BASE}" \
+                      "VITE_LOGTO_ENDPOINT=${LOGTO_ENDPOINT}" \
+                      "VITE_LOGTO_REDIRECT_URI=${REDIRECT_URI}" \
+                      "VITE_LOGTO_POST_LOGOUT_REDIRECT_URI=${LOGOUT_URI}"; do
+            name="${pair%%=*}"; value="${pair#*=}"
+            case "${value}" in
+              https://*) echo "OK ${name}=${value}" ;;
+              *) echo "::error title=生产地址必须为 HTTPS::${name}='${value}'，请在 Settings > Variables 改成 https://"; exit 1 ;;
+            esac
+          done
+          case "${REDIRECT_URI}" in
+            *'#'*) echo "::error title=回调地址不能带 fragment::${REDIRECT_URI}"; exit 1 ;;
+          esac
+
       - name: Build (typecheck + bundle)
         run: npm run build
         env:
-          # Vite 的 PUBLIC_PATH 由命令行参数注入，优先级高于代码里的默认值
-          VITE_PUBLIC_PATH: ${{ vars.VITE_PUBLIC_PATH }}
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-          VITE_LOGTO_ENDPOINT: ${{ vars.VITE_LOGTO_ENDPOINT }}
+          VITE_PUBLIC_PATH: ${{ vars.VITE_PUBLIC_PATH || '/tools/' }}
+          # 线上后端域名：api.alsoapp.com（HTTPS 反代到云主机容器 :8080）
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.alsoapp.com' }}
+          VITE_LOGTO_ENDPOINT: ${{ vars.VITE_LOGTO_ENDPOINT || 'https://account.alsoapp.com' }}
           VITE_LOGTO_APP_ID: ${{ vars.VITE_LOGTO_APP_ID }}
           VITE_LOGTO_RESOURCE: ${{ vars.VITE_LOGTO_RESOURCE }}
-          VITE_LOGTO_REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI }}
-          VITE_LOGTO_POST_LOGOUT_REDIRECT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI }}
+          VITE_LOGTO_REDIRECT_URI: ${{ vars.VITE_LOGTO_REDIRECT_URI || 'https://liaozhimingandy.github.io/tools/' }}
+          VITE_LOGTO_POST_LOGOUT_REDIRECT_URI: ${{ vars.VITE_LOGTO_POST_LOGOUT_REDIRECT_URI || 'https://liaozhimingandy.github.io/tools/' }}
           VITE_LOGTO_SCOPES: ${{ vars.VITE_LOGTO_SCOPES }}
 
       - name: Setup Pages
