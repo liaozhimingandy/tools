@@ -55,6 +55,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   let lastActivity = Date.now()
   let lockTimer: ReturnType<typeof setInterval> | null = null
   let toastTimer: ReturnType<typeof setTimeout> | null = null
+  let autoPushTimer: ReturnType<typeof setTimeout> | null = null
   let lastCopied: string | null = null
   let forcedChangePw = false
 
@@ -97,6 +98,31 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
 
   function touch(): void {
     lastActivity = Date.now()
+  }
+
+  function stopAutoPush(): void {
+    if (autoPushTimer) {
+      clearTimeout(autoPushTimer)
+      autoPushTimer = null
+    }
+  }
+
+  /**
+   * 编辑后自动上传（防抖 3s）：仅当已登录且可同步（canSync）时生效。
+   * 期间再有编辑会顺延；到点调用 cloud.push()，若内容无变化会被 push 内部判重跳过，
+   * 不会空转版本号。冲突（云端被其他端更新）不自动强推，交用户在同步面板手动处理。
+   */
+  function scheduleAutoPush(): void {
+    if (!cloud.canSync.value) return
+    stopAutoPush()
+    autoPushTimer = setTimeout(() => {
+      autoPushTimer = null
+      void cloud.push().then((r) => {
+        if (!r.ok && r.stale) {
+          toast('云端有更新，自动上传已跳过，请在同步面板处理冲突')
+        }
+      })
+    }, 3000)
   }
 
   // ---- 创建 / 恢复码确认 ----
@@ -179,6 +205,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     view.value = 'all'
     void clearClipboardIfOurs()
     stopLockTimer()
+    stopAutoPush()
     dialog.value = null
     countdown.value = ''
     failHint.value = ''
@@ -247,6 +274,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     try {
       Object.assign(plain, await vault.saveItem(store, vk.value, p))
       toast('已加密保存到本地')
+      scheduleAutoPush()
     } finally {
       busy.value = false
     }
@@ -256,11 +284,13 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     await vault.deleteItem(store, vk.value, plain, id, purge)
     if (purge) delete revealed[id]
     toast(purge ? '已彻底删除' : '已移入回收站')
+    scheduleAutoPush()
   }
   async function restore(id: string): Promise<void> {
     if (!vk.value) return
     await vault.restoreItem(store, vk.value, plain, id)
     toast('已恢复条目')
+    scheduleAutoPush()
   }
   async function toggleFav(id: string): Promise<void> {
     if (!vk.value) return
@@ -314,6 +344,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     forcedChangePw = false
     dialog.value = null
     toast('主密码已更新，条目密文未改动')
+    scheduleAutoPush()
   }
   async function makeNewRecovery(): Promise<{ code: string; recovery: Account['recovery'] }> {
     if (!vk.value) throw new Error('保险库已锁定')
@@ -322,6 +353,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   function commitNewRecovery(recovery: Account['recovery']): void {
     account.value = vault.commitRecovery(store, recovery)
     toast('恢复码已更新，旧码已作废')
+    scheduleAutoPush()
   }
   function savePrefs(next: Prefs): void {
     Object.assign(prefs, next)
@@ -439,6 +471,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   })
   onUnmounted(() => {
     stopLockTimer()
+    stopAutoPush()
     if (toastTimer) clearTimeout(toastTimer)
     document.removeEventListener('visibilitychange', onVisibility)
     document.removeEventListener('pointerdown', onPointer)

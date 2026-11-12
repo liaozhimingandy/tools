@@ -19,6 +19,8 @@ export const LS = {
   c: 'sk.cloudRev',
   /** 上次成功同步的时间戳（毫秒），仅展示用 */
   t: 'sk.cloudSyncAt',
+  /** 上次成功同步的「内容签名」（排除 savedAt 时间戳），用于判重，避免相同内容重复上传导致版本号无谓自增 */
+  s: 'sk.cloudBlobSig',
 } as const
 
 /** 最小存储契约，对齐 Storage 的同步子集 */
@@ -113,6 +115,16 @@ export function getCloudSyncAt(store: StorageAdapter): number | null {
 }
 export function setCloudSyncAt(store: StorageAdapter, ts: number): void {
   store.setItem(LS.t, String(ts))
+}
+/** 上次成功同步的「内容签名」；空串表示从未同步。 */
+export function getCloudBlobSig(store: StorageAdapter): string {
+  return store.getItem(LS.s) || ''
+}
+export function setCloudBlobSig(store: StorageAdapter, sig: string): void {
+  store.setItem(LS.s, sig)
+}
+export function clearCloudBlobSig(store: StorageAdapter): void {
+  store.removeItem(LS.s)
 }
 
 export function wipeAll(store: StorageAdapter): void {

@@ -12,10 +12,11 @@ import type { StorageAdapter } from '@/services/safekeep/storage.ts'
 import {
   curRev, getAccount, getItems, getCloudRev, setCloudRev,
   setCloudSyncAt, getCloudSyncAt,
+  getCloudBlobSig, setCloudBlobSig, clearCloudBlobSig,
 } from '@/services/safekeep/storage.ts'
 import {
   buildCloudBlob, decidePull, decidePush, toRemoteSummary,
-  applyCloudBlob, BlobError, type PushDecision,
+  applyCloudBlob, BlobError, blobContentSig, type PushDecision,
 } from '@/services/cloud/sync.ts'
 import { fetchVault, fetchRevision, putVault, CloudError } from '@/services/cloud/client.ts'
 import type { RemoteSummary } from '@/services/cloud/types.ts'
@@ -45,6 +46,8 @@ export interface PushOutcome {
   message: string
   /** stale：云端被其他端更新，需要用户选择「拉取」或「强制覆盖」 */
   stale?: { remote: number; local: number }
+  /** skipped：内容与上次同步一致，已跳过上传（云端版本号不变） */
+  skipped?: boolean
 }
 
 export interface PullOutcome {
@@ -105,6 +108,7 @@ export function useCloudSync(
     lastSyncedAt.value = null
     remoteSummary.value = null
     lastError.value = ''
+    clearCloudBlobSig(store) // 内容签名属于旧库，销毁后必须归零，避免重建后误判「未变化」
   }
 
   /** 刷新登录态与用户信息（视图挂载后可调用，或登录态变化时）。 */
@@ -193,12 +197,23 @@ export function useCloudSync(
   /**
    * 上传本地密文到云端。expected_revision 用本地记录的 cloudRev 做 CAS。
    * force=true 时以当前远端 revision 为 base 强推（覆盖其他端改动）。
+   *
+   * 内容判重：若本次打包的内容与上次成功同步完全一致（排除 savedAt 时间戳），
+   * 直接跳过 PUT，不调用 setCloudRev——云端版本号不会无谓自增（修复「上传相同内容版本也+1」）。
    */
   async function push(force = false): Promise<PushOutcome> {
     if (!canSync.value) return { ok: false, message: '请先登录并配置云端' }
     const account = getAccount(store)
     if (!account) return { ok: false, message: '本机还没有保险库，请先创建或拉取云端数据' }
     const opts = requireOpts()!
+    const blob = buildCloudBlob(account, getItems(store), curRev(store))
+
+    // —— 内容判重：相同则跳过，避免版本号空转 ——
+    const sig = blobContentSig(blob)
+    if (sig === getCloudBlobSig(store)) {
+      return { ok: true, message: '内容未变化，已跳过上传（云端版本保持不变）', skipped: true }
+    }
+
     busy.value = true
     lastError.value = ''
     try {
@@ -215,12 +230,12 @@ export function useCloudSync(
       else if (decision.kind === 'update') expected = decision.base
       else expected = remoteRev ?? 0 // stale 且未强推：不会再走到这里（上面已 return）
 
-      const blob = buildCloudBlob(account, getItems(store), curRev(store))
       const res = await putVault(opts, blob, expected)
       setCloudRev(store, res.revision)
       setCloudSyncAt(store, Date.now())
       cloudRev.value = res.revision
       lastSyncedAt.value = Date.now()
+      setCloudBlobSig(store, sig) // 记录本次成功上传的内容签名，供下次判重
       const msg = `已加密上传 ${Object.keys(blob.items).length} 条密文到云端（版本 ${res.revision}）`
       return { ok: true, message: msg }
     } catch (e) {
@@ -259,6 +274,7 @@ export function useCloudSync(
       setCloudSyncAt(store, Date.now())
       cloudRev.value = remote.revision
       lastSyncedAt.value = Date.now()
+      setCloudBlobSig(store, blobContentSig(remote.blob)) // 拉取后本地内容==远端，刷新签名，避免随后无谓上传
       remoteSummary.value = toRemoteSummary(
         true, remote.blob,
         { revision: remote.revision, updatedAt: remote.updatedAt, device: remote.device },

@@ -28,6 +28,24 @@ export class BlobError extends Error {
   }
 }
 
+/**
+ * 内容签名：用于判重，避免「相同内容重复上传」把后端 revision 无谓 +1。
+ *
+ * 关键：排除 savedAt。savedAt 只是「保存时间戳」而非保险库内容，每次打包都变；
+ * 若纳入比较，签名永远不等，判重永远失效。这里只覆盖 fmt/schema/rev/account/items
+ * 这些真正决定内容的部分。同一份内容无论何时打包，签名恒定（确定性 FNV-1a，零依赖）。
+ */
+export function blobContentSig(blob: CloudVaultBlob): string {
+  const { savedAt: _omit, ...content } = blob
+  const json = JSON.stringify(content)
+  let h = 0x811c9dc5
+  for (let i = 0; i < json.length; i++) {
+    h ^= json.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(16).padStart(8, '0')
+}
+
 /** 把本地密封结构打包成云端不透明 blob。明文条目不参与，只搬密文。 */
 export function buildCloudBlob(
   account: Account,
