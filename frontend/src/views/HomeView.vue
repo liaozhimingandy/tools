@@ -62,8 +62,7 @@ async function logout(): Promise<void> {
 
   <section class="portal-hero">
     <h1>我的工具集</h1>
-    <p>平时开发的单页面小工具，统一从这里进入。每个工具独立运行、互不依赖；规范性约束由 ai-engineering-standards 统一提供。</p>
-  </section>
+   </section>
 
   <section class="tool-grid">
     <RouterLink v-for="t in tools" :key="t.to" :to="t.to" class="no-underline">
@@ -85,10 +84,6 @@ async function logout(): Promise<void> {
       </t-card>
     </RouterLink>
   </section>
-
-  <footer class="portal-foot">
-    工程规范来源：ai-engineering-standards · 新增工具请在 src/router 与 HomeView 同步登记。
-  </footer>
 </template>
 
 <style scoped>

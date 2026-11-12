@@ -138,7 +138,7 @@ watch(() => sk.screen.value, (s) => {
   <div>
     <!-- 顶栏 -->
     <header class="topbar">
-      <div class="brand"><RouterLink to="/">tools</RouterLink> · 锦<span class="text-brand">囊</span></div>
+      <div class="brand"><RouterLink to="/">tools</RouterLink> ·<span class="text-brand">锦囊</span></div>
       <t-tag v-if="sk.cloud.configured.value" size="small" variant="light" :theme="sk.cloud.canSync.value ? 'success' : 'default'">
         {{ sk.cloud.statusText.value }}
       </t-tag>
