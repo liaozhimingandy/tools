@@ -290,8 +290,10 @@ watch(() => sk.screen.value, (s) => {
           </template>
         </t-alert>
 
-        <div class="vault-layout">
-          <aside class="side">
+        <div class="vault-grid">
+          <t-row :gutter="[20, 20]">
+            <t-col :xs="24" :sm="24" :md="6" :lg="5" class="side-col">
+              <aside class="side">
             <div class="side-title">条目</div>
             <button :class="{ on: sk.view.value === 'all' }" @click="sk.view.value = 'all'; sk.tag.value = ''">全部条目 <i>{{ sk.counts.value.all }}</i></button>
             <button :class="{ on: sk.view.value === 'fav' }" @click="sk.view.value = 'fav'; sk.tag.value = ''">收藏 <i>{{ sk.counts.value.fav }}</i></button>
@@ -313,9 +315,10 @@ watch(() => sk.screen.value, (s) => {
             <button @click="sk.dialog.value = 'settings'"><SettingIcon /> 设置</button>
             <button @click="sk.dialog.value = 'account'"><CloudIcon /> 账号与云端同步</button>
             <button @click="sk.dialog.value = 'storage'"><SearchIcon /> 本地存储自检</button>
-          </aside>
-
-          <main class="main">
+            </aside>
+          </t-col>
+          <t-col :xs="24" :sm="24" :md="18" :lg="19" class="main-col">
+            <main class="main">
             <div class="toolbar">
               <t-input v-model="sk.filter.value" placeholder="搜索标题、账号、网址、标签…" autocomplete="off" clearable>
                 <template #prefix-icon><SearchIcon /></template>
@@ -356,7 +359,9 @@ watch(() => sk.screen.value, (s) => {
                 <span class="ts">{{ new Date(p.updatedAt || 0).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }}</span>
               </div>
             </div>
-          </main>
+            </main>
+          </t-col>
+          </t-row>
         </div>
       </section>
     </div>
@@ -398,9 +403,22 @@ watch(() => sk.screen.value, (s) => {
 .cloud-restore-desc { color: var(--color-ink-2); font-size: 12.5px; line-height: 1.65; margin: 0 0 12px; }
 .cloud-restore-desc b { color: var(--color-ink); }
 
-.vault-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; }
-@media (max-width: 760px) { .vault-layout { grid-template-columns: 1fr; } .side { display: flex; flex-wrap: wrap; gap: 6px; position: static; } .side :deep(.t-divider), .side .side-title { display: none; } .side button { padding: 5px 9px; font-size: 12px; width: auto; } }
-.side { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 12px; padding: 12px; align-self: start; position: sticky; top: 74px; }
+/* 响应式栅格：用 TDesign t-row/t-col 的 xs/sm/md/lg 断点。
+   ≤991px（手机/缩窗）自动堆叠为单列，移动端侧栏转为紧凑筛选条；
+   ≥992px 侧栏定宽居左、主区自适应，沿用 sticky 跟随滚动。 */
+.vault-grid { width: 100%; }
+.side-col { min-width: 0; }
+.main-col { min-width: 0; }
+.side { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 12px; padding: 12px; position: sticky; top: 74px; }
+@media (max-width: 991px) {
+  .side { position: static; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .side :deep(.t-divider), .side .side-title, .side .side-empty { display: none; }
+  .side button { width: auto; padding: 5px 9px; font-size: 12px; }
+}
+/* 极窄屏：顶栏允许换行，避免品牌/状态/按钮挤成一行被截断 */
+@media (max-width: 560px) {
+  .topbar { height: auto; flex-wrap: wrap; padding: 8px 14px; row-gap: 6px; }
+}
 .side button { display: flex; width: 100%; border: 0; background: transparent; text-align: left; padding: 7px 9px; border-radius: 7px; color: var(--color-ink-2); font-size: 12.5px; align-items: center; gap: 6px; transition: background 0.15s, color 0.15s; }
 .side button:hover { background: var(--color-brand-softer); }
 .side button.on { background: var(--color-brand-soft); color: var(--color-brand); font-weight: 600; }
