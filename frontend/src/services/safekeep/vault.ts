@@ -23,7 +23,7 @@ import type {
   UnlockResult,
 } from './types'
 
-export const DEFAULT_PREFS: Prefs = { idleMs: 300000, hideLock: true, clipSec: 15 }
+export const DEFAULT_PREFS: Prefs = { lockMode: 'leave', idleMs: 300000, clipSec: 15 }
 
 export const TYPE_NAME: Record<PlainItem['type'], string> = {
   login: '登录',

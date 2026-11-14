@@ -76,8 +76,10 @@ export type PlainItems = Record<string, PlainItem>
 
 /** 非敏感偏好，明文存储 */
 export interface Prefs {
+  /** 自动锁定方式：leave=离开页面即锁定（默认）；idle=空闲超时锁定；both=两者都启用 */
+  lockMode: 'leave' | 'idle' | 'both'
+  /** 空闲超时时长（毫秒）；lockMode 为 idle/both 时生效，0 表示不设超时 */
   idleMs: number
-  hideLock: boolean
   clipSec: number
 }
 

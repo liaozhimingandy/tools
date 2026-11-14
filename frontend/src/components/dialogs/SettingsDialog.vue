@@ -1,6 +1,6 @@
 <script setup lang="ts">
-/** 设置：空闲锁定、后台锁定、剪贴板秒数 + 危险操作入口。 */
-import { reactive, ref } from 'vue'
+/** 设置：自动锁定方式、空闲时长、剪贴板秒数 + 危险操作入口。 */
+import { computed, reactive, ref } from 'vue'
 import { SettingIcon, LockOnIcon, RefreshIcon, DeleteIcon } from 'tdesign-icons-vue-next'
 import type { Prefs } from '@/services/safekeep/types.ts'
 import type { Account } from '@/services/safekeep/types.ts'
@@ -18,16 +18,26 @@ const visible = ref(true)
 const idleOptions: Array<[number, string]> = [
   [0, '关闭（不推荐）'], [60000, '1 分钟'], [300000, '5 分钟'], [900000, '15 分钟'], [1800000, '30 分钟'],
 ]
+const lockOptions: Array<{ value: Prefs['lockMode']; label: string }> = [
+  { value: 'leave', label: '离开页面即锁定' },
+  { value: 'idle', label: '空闲超时锁定' },
+  { value: 'both', label: '两者都启用' },
+]
 const form = reactive({
+  lockMode: (props.prefs.lockMode || 'leave') as Prefs['lockMode'],
   idleMs: props.prefs.idleMs,
-  hideLock: props.prefs.hideLock,
   clipSec: props.prefs.clipSec,
 })
+const idleEnabled = computed(() => form.lockMode === 'idle' || form.lockMode === 'both')
 function fmtTime(ts: number | null): string {
   return ts ? new Date(ts).toLocaleString('zh-CN') : '从未'
 }
 function save(): void {
-  emit('save', { idleMs: Number(form.idleMs) || 0, hideLock: !!form.hideLock, clipSec: Math.max(5, Math.min(120, Number(form.clipSec) || 15)) })
+  emit('save', {
+    lockMode: form.lockMode,
+    idleMs: Number(form.idleMs) || 0,
+    clipSec: Math.max(5, Math.min(120, Number(form.clipSec) || 15)),
+  })
 }
 </script>
 
@@ -41,14 +51,16 @@ function save(): void {
   >
     <p class="dlg-desc">这些偏好不是敏感数据，明文保存在本地；保险库内容始终加密。</p>
 
-    <label class="field-label">空闲自动锁定</label>
-    <t-select v-model="form.idleMs" class="mb-3.5">
-      <t-option v-for="[v, label] in idleOptions" :key="v" :value="v" :label="label" />
-    </t-select>
-    <div class="flex items-center gap-2 mb-3.5">
-      <t-switch v-model="form.hideLock" />
-      <span class="text-[12.5px] text-ink-2">切到后台立即锁定</span>
-    </div>
+    <label class="field-label">自动锁定方式</label>
+    <t-radio-group v-model="form.lockMode" variant="default-filled" class="mb-3.5">
+      <t-radio-button v-for="o in lockOptions" :key="o.value" :value="o.value">{{ o.label }}</t-radio-button>
+    </t-radio-group>
+    <template v-if="idleEnabled">
+      <label class="field-label">空闲超时时长</label>
+      <t-select v-model="form.idleMs" class="mb-3.5">
+        <t-option v-for="[v, label] in idleOptions" :key="v" :value="v" :label="label" />
+      </t-select>
+    </template>
     <label class="field-label">剪贴板自动清除（秒）</label>
     <t-input-number v-model="form.clipSec" :min="5" :max="120" theme="normal" class="w-full mb-4" />
 

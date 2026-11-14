@@ -292,7 +292,7 @@ watch(() => sk.screen.value, (s) => {
 
         <div class="vault-grid">
           <t-row :gutter="[20, 20]">
-            <t-col :xs="24" :sm="24" :md="6" :lg="5" class="side-col">
+            <t-col :xs="12" :sm="12" :md="3" :lg="3" class="side-col">
               <aside class="side">
             <div class="side-title">条目</div>
             <button :class="{ on: sk.view.value === 'all' }" @click="sk.view.value = 'all'; sk.tag.value = ''">全部条目 <i>{{ sk.counts.value.all }}</i></button>
@@ -317,7 +317,7 @@ watch(() => sk.screen.value, (s) => {
             <button @click="sk.dialog.value = 'storage'"><SearchIcon /> 本地存储自检</button>
             </aside>
           </t-col>
-          <t-col :xs="24" :sm="24" :md="18" :lg="19" class="main-col">
+          <t-col :xs="12" :sm="12" :md="9" :lg="9" class="main-col">
             <main class="main">
             <div class="toolbar">
               <t-input v-model="sk.filter.value" placeholder="搜索标题、账号、网址、标签…" autocomplete="off" clearable>

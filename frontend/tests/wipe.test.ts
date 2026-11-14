@@ -26,7 +26,7 @@ test('wipeAll 清掉全部 sk.* 键（含云端同步记账），不留旧库残
   setAccount(store, { app: 'old', wrapped: 'w', salt: 's', kdf: { name: 'PBKDF2' }, recovery: { wrapped: 'r' } } as never)
   setItems(store, { item1: { iv: 'iv', ct: 'ct' } } as never)
   setRev(store, 42)
-  setPrefs(store, { idleMs: 1000, hideLock: false, clipSec: 5 } as never)
+  setPrefs(store, { lockMode: 'idle', idleMs: 1000, clipSec: 5 } as never)
   setCloudRev(store, 9)
   setCloudSyncAt(store, Date.now())
 

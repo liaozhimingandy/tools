@@ -51,7 +51,7 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   /** 云端恢复的阶段提示：让「登录 → 回跳 → 下载密文」每一步都可见，避免点了没反应。 */
   const restoreStage: Ref<string> = ref('')
 
-  const prefs = reactive<Prefs>({ idleMs: 300000, hideLock: true, clipSec: 15 })
+  const prefs = reactive<Prefs>({ lockMode: 'leave', idleMs: 300000, clipSec: 15 })
   let lastActivity = Date.now()
   let lockTimer: ReturnType<typeof setInterval> | null = null
   let toastTimer: ReturnType<typeof setTimeout> | null = null
@@ -84,6 +84,9 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   const pendingRecoveryCode = computed(() => pending.value?.recoveryCode ?? '')
   /** 密码生成器「用于新条目」的预填值 */
   const prefillPassword = ref('')
+  /** 锁定模式派生：离开即锁 / 空闲超时锁 各自是否启用（both 时两者都开） */
+  const lockOnHide = computed(() => prefs.lockMode === 'leave' || prefs.lockMode === 'both')
+  const lockOnIdle = computed(() => prefs.lockMode === 'idle' || prefs.lockMode === 'both')
   const statusText = computed(() => {
     if (!account.value) return '未初始化'
     return unlocked.value ? '本地 · 已解锁' : '本地 · 已锁定'
@@ -231,16 +234,21 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
     lockTimer = setInterval(() => {
       if (!vk.value) return
       const hidden = typeof document !== 'undefined' && document.hidden
-      if (VC.shouldLock(Date.now(), lastActivity, prefs.idleMs, prefs.hideLock && hidden)) {
-        lock('空闲超时，已自动锁定')
+      const forceHide = lockOnHide.value && hidden
+      // 锁定的唯一判据：离开页面（forceHide）或 空闲超时（仅 idle/both 时按 idleMs 计）。
+      // 离开即锁模式下传入 idleMs=0，等价于关闭空闲超时，不会误锁。
+      if (VC.shouldLock(Date.now(), lastActivity, lockOnIdle.value ? prefs.idleMs : 0, forceHide)) {
+        lock(forceHide ? '已切到后台，保险库自动锁定' : '空闲超时，已自动锁定')
         return
       }
-      const left = Math.max(0, prefs.idleMs - (Date.now() - lastActivity))
-      const m = Math.floor(left / 60000)
-      const s = Math.floor((left % 60000) / 1000)
-      countdown.value = prefs.idleMs
-        ? '自动锁定 ' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0')
-        : '自动锁定已关闭'
+      if (lockOnIdle.value && prefs.idleMs > 0) {
+        const left = Math.max(0, prefs.idleMs - (Date.now() - lastActivity))
+        const m = Math.floor(left / 60000)
+        const s = Math.floor((left % 60000) / 1000)
+        countdown.value = '自动锁定 ' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0')
+      } else {
+        countdown.value = lockOnHide.value ? '离开页面即锁定' : '自动锁定已关闭'
+      }
     }, 1000)
   }
 
@@ -407,8 +415,12 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   // ---- 生命周期 ----
   function onVisibility(): void {
     if (typeof document === 'undefined') return
-    if (document.hidden && prefs.hideLock && vk.value) lock('已切到后台，保险库自动锁定')
-    else if (!document.hidden && vk.value && VC.shouldLock(Date.now(), lastActivity, prefs.idleMs, false)) lock('空闲超时，已自动锁定')
+    const hidden = document.hidden
+    if (hidden) {
+      if (lockOnHide.value && vk.value) lock('已切到后台，保险库自动锁定')
+    } else if (vk.value && lockOnIdle.value && VC.shouldLock(Date.now(), lastActivity, prefs.idleMs, false)) {
+      lock('空闲超时，已自动锁定')
+    }
     touch()
   }
   function onPointer(): void {
@@ -455,9 +467,16 @@ export function useSafeKeep(store: StorageAdapter = browserStorage()) {
   }
 
   onMounted(() => {
-    const p = getPrefs(store)
+    const p = getPrefs(store) as Partial<Prefs> & { hideLock?: boolean }
+    // 旧版用 hideLock 布尔，新版用 lockMode 三态：做向后兼容迁移，避免老用户偏好丢失。
+    if (p.lockMode === 'leave' || p.lockMode === 'idle' || p.lockMode === 'both') {
+      prefs.lockMode = p.lockMode
+    } else if (p.hideLock === false) {
+      prefs.lockMode = 'idle' // 旧版关掉了后台锁 → 仅空闲超时锁
+    } else {
+      prefs.lockMode = 'leave' // 默认：离开页面即锁定（亦覆盖旧版默认值）
+    }
     prefs.idleMs = typeof p.idleMs === 'number' ? p.idleMs : 300000
-    prefs.hideLock = p.hideLock !== false
     prefs.clipSec = p.clipSec || 15
     account.value = getAccount(store)
     lastBackupAt.value = account.value?.lastBackupAt ?? null
