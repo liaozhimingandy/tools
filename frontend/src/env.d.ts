@@ -16,6 +16,8 @@ interface ImportMetaEnv {
   readonly VITE_LOGTO_REDIRECT_URI?: string
   readonly VITE_LOGTO_POST_LOGOUT_REDIRECT_URI?: string
   readonly VITE_LOGTO_SCOPES?: string
+  /** 本地联调身份回退（构建期注入；生产构建不得设置）。 */
+  readonly VITE_DEV_USER_SUB?: string
 }
 
 interface ImportMeta {

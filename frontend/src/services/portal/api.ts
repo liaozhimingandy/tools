@@ -10,7 +10,7 @@
  *  4. 超时 + 错误摊平：网络异常转成可展示的 PortalApiError，不泄漏内部细节。
  */
 
-import { apiConfigured, cloudConfig } from '@/config.ts'
+import { apiConfigured, cloudConfig, devUserSub } from '@/config.ts'
 import { currentAccessToken, currentSub } from '@/services/auth/logto.ts'
 
 export interface PortalApp {
@@ -84,7 +84,8 @@ async function authHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   const token = await currentAccessToken().catch(() => null)
   if (token) headers.Authorization = `Bearer ${token}`
-  const sub = await currentSub().catch(() => null)
+  // 真实 Logto 身份优先；仅本地联调（构建期注入 VITE_DEV_USER_SUB）时回退
+  const sub = (await currentSub().catch(() => null)) || devUserSub()
   if (sub) headers['X-User-Sub'] = sub
   return headers
 }

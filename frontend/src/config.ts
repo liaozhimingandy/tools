@@ -78,6 +78,17 @@ export function logtoEnabled(): boolean {
   return logtoConfig().enabled
 }
 
+/**
+ * 本地联调身份回退（VITE_DEV_USER_SUB，构建期注入）。
+ *
+ * 仅用于「后端 dev/passthrough 模式 + 无真实 Logto 登录」的本地整合验证：
+ * 未登录时以此值作为 X-User-Sub 回退，配合后端 PORTAL_ADMIN_SUBS 进入管理后台。
+ * 生产构建绝不设置该变量 —— 未登录用户将不会有任何身份头，与线上行为一致。
+ */
+export function devUserSub(): string {
+  return trim(ENV.VITE_DEV_USER_SUB)
+}
+
 /** 是否具备启用云端同步的全部条件（API 地址 + Logto 三件套）。 */
 export function cloudEnabled(): boolean {
   return apiConfigured() && logtoEnabled()
