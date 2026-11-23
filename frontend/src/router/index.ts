@@ -13,8 +13,34 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'home',
+    component: () => import('@/views/AppsHomeView.vue'),
+    meta: { title: 'Also Apps' },
+  },
+  // 原有工具集首页（SafeKeep 等独立工具仍从此处进入）
+  {
+    path: '/tools-home',
+    name: 'tools-home',
     component: () => import('@/views/HomeView.vue'),
     meta: { title: '工具集' },
+  },
+  // ---- Also Apps 统一应用门户 ----
+  {
+    path: '/apps',
+    name: 'apps',
+    component: () => import('@/views/AppsCenterView.vue'),
+    meta: { title: '应用中心' },
+  },
+  {
+    path: '/apps/:code',
+    name: 'app-detail',
+    component: () => import('@/views/AppDetailView.vue'),
+    meta: { title: '应用详情' },
+  },
+  {
+    path: '/admin/apps',
+    name: 'admin-apps',
+    component: () => import('@/views/AdminAppsView.vue'),
+    meta: { title: '应用中心管理' },
   },
   {
     path: '/safekeep',

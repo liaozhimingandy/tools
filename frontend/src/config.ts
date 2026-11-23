@@ -24,9 +24,12 @@
 /** 构建期环境变量快照；Node 下为空对象（用 as 断言补齐 Vite 注入的内置键）。 */
 const ENV = ((import.meta as unknown as { env?: ImportMetaEnv }).env ?? {}) as ImportMetaEnv
 
-/** Logto 公开客户端配置默认值（可被 VITE_LOGTO_* 覆盖）。非密钥。 */
+/**
+ * Logto 公开客户端配置默认值（可被 VITE_LOGTO_* 覆盖）。非密钥。
+ * appId 是 Also Account 为 Also Apps 门户签发的 Public Client（PKCE，无 secret）。
+ */
 export const DEFAULT_LOGTO_ENDPOINT = 'https://account.alsoapp.com'
-export const DEFAULT_LOGTO_APP_ID = '0z2t6jrnf4z9lzy4miusg'
+export const DEFAULT_LOGTO_APP_ID = 'plu65e7c0nypndqg7s4hp'
 /** 后端 API 根默认值（可被 VITE_API_BASE_URL 覆盖）。非密钥，内联为默认值开箱即用。 */
 export const DEFAULT_API_BASE_URL = 'https://api-tools.alsoapp.com'
 

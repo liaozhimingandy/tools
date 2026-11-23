@@ -243,3 +243,13 @@ def allowed_tool_ids() -> set[str]:
     """允许的工具 id 白名单；空集合表示不限制（用正则校验形状即可）。"""
     raw = os.environ.get("TOOLS_TOOL_IDS", "")
     return {s.strip() for s in raw.split(",") if s.strip()}
+
+
+def portal_admin_subs() -> set[str]:
+    """Also Apps 门户管理员的 Logto sub 白名单（逗号分隔）。
+
+    空集合 = 未配置管理员，此时所有管理接口 fail-closed（拒绝全部请求），
+    而不是「人人都是管理员」。身份来自 auth provider 校验过的 token/头。
+    """
+    raw = os.environ.get("PORTAL_ADMIN_SUBS", "")
+    return {s.strip() for s in raw.split(",") if s.strip()}

@@ -12,6 +12,7 @@ from . import auth, config
 from .auth import AuthProvider, LogtoJWTProvider
 from .store import ConfigRepository, MemoryRepository
 from .tools_registry import ToolRepository, build_repository as build_tool_repository
+from .portal_store import PortalRepository, build_repository as build_portal_repository
 
 
 def build_auth_provider() -> AuthProvider:
@@ -52,6 +53,18 @@ def build_tools() -> ToolRepository:
     return build_tool_repository(None)
 
 
+def build_portal(dsn: str | None) -> PortalRepository:
+    """Also Apps 门户仓储：与公共配置表共用 TOOLS_STORE / DSN 配置。"""
+    return build_portal_repository(dsn)
+
+
+def dsn_if_needed() -> str | None:
+    """仅 postgres 模式返回 DSN；空 DSN 由 build_repository 统一 fail-closed。"""
+    if config.store_backend() != "postgres":
+        return None
+    return config.database_url()
+
+
 def logto_configured(provider: AuthProvider) -> bool:
     return isinstance(provider, LogtoJWTProvider) and provider.configured
 
@@ -63,13 +76,14 @@ def wire(app) -> None:
     app.state.auth_provider = provider
     app.state.repository = repo
     app.state.tool_repository = build_tools()
+    app.state.portal_repository = build_portal(dsn_if_needed())
     app.state.logto_configured = logto_configured(provider)
     app.state.store_backend = config.store_backend()
 
 
 def teardown(app) -> None:
     """关停时释放各连接池等资源。"""
-    for attr in ("repository", "tool_repository"):
+    for attr in ("repository", "tool_repository", "portal_repository"):
         obj = getattr(app.state, attr, None)
         close = getattr(obj, "close", None)
         if callable(close):

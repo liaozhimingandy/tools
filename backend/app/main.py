@@ -29,6 +29,9 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, runtime
 from .configs import router as configs_router
+from .portal_api import router as portal_router
+from .portal_admin_api import router as portal_admin_router
+from .portal_models import PortalError
 from .schemas import APP_ERROR_CODES, HealthResponse, ServiceStatus, VersionResponse
 
 API_PREFIX = "/v1"
@@ -63,7 +66,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=config.cors_origins(),
     allow_credentials=False,
-    allow_methods=["GET", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-User-Sub", "If-Match"],
     expose_headers=["ETag"],
     max_age=600,
@@ -105,6 +108,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+@app.exception_handler(PortalError)
+async def portal_error_handler(request: Request, exc: PortalError) -> JSONResponse:
+    """门户领域异常摊平为统一错误形状，避免泄漏堆栈与内部路径。"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_error_body(exc.status_code, exc.code, str(exc)),
+    )
+
+
 # --------------------------------------------------------------------------- #
 # 元信息接口
 # --------------------------------------------------------------------------- #
@@ -131,6 +143,10 @@ def version() -> VersionResponse:
 
 # 公共配置表 API（/v1/auth/mode 与 /v1/configs/*）
 app.include_router(configs_router)
+
+# Also Apps 门户 API（公开目录 / 用户功能 / 管理后台）
+app.include_router(portal_router)
+app.include_router(portal_admin_router)
 
 
 # --------------------------------------------------------------------------- #
